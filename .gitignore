@@ -1,0 +1,29 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Временные файлы
+*.tmp
+*.log
+
+# PDF и Word файлы (если не нужны в репозитории)
+# *.pdf
+# *.docx
+
+# Скрипты конвертации (опционально)
+# convert_*.py
+
