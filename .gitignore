@@ -27,3 +27,6 @@ Thumbs.db
 # Скрипты конвертации (опционально)
 # convert_*.py
 
+convert_pdf_to_md.py
+convert_word_to_md.py
+Tasks.docx

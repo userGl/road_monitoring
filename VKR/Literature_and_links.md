@@ -5,38 +5,40 @@
 
 ### 1.1. Детекция дефектов дорожного покрытия
 
-1. **RDD2022: A multi-national image dataset for automatic Road Damage Detection**
+1. **Automated Road Safety: Enhancing Sign and Surface Damage Detection with AI**
+   - Авторы: D. Merolla, V. Latorre, A. Salis, G. Boanelli
+   - Год: 2024
+   - Ссылка: https://arxiv.org/abs/2407.15406
+
+
+2. **RDD2022: A multi-national image dataset for automatic Road Damage Detection**
    - Авторы: Deeksha Arya, Hiroya Maeda, Sanjay Kumar Ghosh, Durga Toshniwal, Yoshihide Sekimoto
    - Год: 2022
    - Ссылка: https://arxiv.org/abs/2209.08538
 
-2. **Pavementscapes: a large-scale hierarchical image dataset for asphalt pavement damage segmentation**
+3. **Pavementscapes: a large-scale hierarchical image dataset for asphalt pavement damage segmentation**
    - Авторы: Zheng Tong, Tao Ma, Ju Huyan, Weiguang Zhang
    - Год: 2022
    - Ссылка: https://arxiv.org/abs/2208.00775
 
-3. **Ensemble of Deep Convolutional Neural Networks for Automatic Pavement Crack Detection and Measurement**
+4. **Ensemble of Deep Convolutional Neural Networks for Automatic Pavement Crack Detection and Measurement**
    - Авторы: Zhun Fan, Chong Li, Ying Chen, Paola Di Mascio, Xiaopeng Chen, Guijie Zhu, Giuseppe Loprencipe
    - Год: 2020
    - Ссылка: https://arxiv.org/abs/2002.03241
 
 
-4. **An asphalt damage dataset and detection system based on RetinaNet for road conditions assessment**
+5. **An asphalt damage dataset and detection system based on RetinaNet for road conditions assessment**
    - Авторы: G. Ochoa-Ruiz, A. A. Angulo-Murillo, A. Ochoa-Zezzatti, L. M. Aguilar-Lobo, J. A. Vega-Fernández, S. Natraj
    - Журнал: Applied Sciences
    - Год: 2020
    - DOI: 10.3390/app10113974
 
-5. **Concrete road crack detection using deep learning-based faster R-CNN method**
+6. **Concrete road crack detection using deep learning-based faster R-CNN method**
    - Авторы: K. Hacıefendioğlu, H. B. Başağa
    - Журнал: Iranian Journal of Science and Technology, Transactions of Civil Engineering
    - Год: 2022
    - DOI: 10.1007/s40996-022-00817-8
 
-6. **Automated Road Safety: Enhancing Sign and Surface Damage Detection with AI**
-   - Авторы: D. Merolla, V. Latorre, A. Salis, G. Boanelli
-   - Год: 2024
-   - Ссылка: https://arxiv.org/abs/2407.15406
 
 7. **Deep learning method to detect the road cracks and potholes for smart cities**
     - Авторы: H.H. Chu, M.R. Saeed, J. Rashid, M.T. Mehmood, I. Ahmad, R.S. Iqbal, G. Ali
