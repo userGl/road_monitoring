@@ -1,4 +1,5 @@
 # Литература и ссылки
+**Здесь находится всё что попалось на глаза по тематике**
 
 
 ## 1. Научные статьи и публикации
@@ -126,3 +127,37 @@
 
 
 
+
+##  Ссылка на проект детекции дефектов дорог на базе RDD:
+https://github.com/oracl4/RoadDamageDetection
+
+Российская компания создала алгоритм для детекции дефектов дорожного полотна
+https://www.computerra.ru/321057/nejroset-ntechlab-pomozhet-vyyavlyat-defekty-dorozhnogo-pokrytiya/
+https://ntechlab.ru/solutions_transport
+
+Разработка от Ростелекома
+https://www.company.rt.ru/press/news_fill/d471200/
+
+МУСИ+МАДИ
+https://iz.ru/1868579/anton-belyi/detektor-luzhi-ii-najdet-yamy-i-defekty-na-dorogah-v-desyatki-raz-bystree
+
+
+
+Roadscanners (Финляндия)
+Сайт: https://www.roadscanners.com/
+Продукт: Road Doctor® Survey Van (RDSV)
+Технология: GPR + LiDAR + 3D акселерометр + ИИ
+
+Vaisala RoadAI (Финляндия)
+Сайт: https://www.vaisala.com/
+https://www.youtube.com/watch?v=XXoNxS2XpwU
+https://map.vionice.io/map-user-guide/MapUserGuide/roadai_overview.html#GUID-D5B7EA32-8F3B-4E73-BE54-5A9D0455A493__GUID-DB85F6A7-E9E4-41BF-9F9A-68F0DF93A81D
+
+Технология: Видео + ИИ для анализа дорожного покрытия
+Maintain-AI (Австралия)
+Сайт: https://www.maintain-ai.com/
+Технология: Видео + ИИ для автоматизированной оценки дорог
+
+GoodRoads (США)
+Сайт: https://www.goodroads.io/
+Технология: Автоматизация инспекции и управления дорогами (вероятно, видео + ИИ)
