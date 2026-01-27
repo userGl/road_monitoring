@@ -4,6 +4,7 @@ POST /api/v1/test/detect — тест детекции (POST base64 image)
 """
 import base64
 import logging
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -11,6 +12,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from ultralytics import YOLO
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +20,28 @@ logger = logging.getLogger(__name__)
 
 # Создание FastAPI приложения
 app = FastAPI(title="Road Damage Detection API")
+
+# Загрузка модели YOLOv8 при старте приложения
+MODEL_PATH = os.getenv("MODEL_PATH", "models/YOLOv8_Small_v1.pt")
+model = None
+
+def load_model():
+    """Загрузка модели YOLOv8"""
+    global model
+    try:
+        if os.path.exists(MODEL_PATH):
+            logger.info(f"Загрузка модели: {MODEL_PATH}")
+            model = YOLO(MODEL_PATH)
+            logger.info("Модель успешно загружена")
+        else:
+            logger.warning(f"Модель не найдена: {MODEL_PATH}. Используется заглушка.")
+            model = None
+    except Exception as e:
+        logger.error(f"Ошибка загрузки модели: {e}")
+        model = None
+
+# Загружаем модель при импорте модуля
+load_model()
 
 
 class Base64ImageRequest(BaseModel):
@@ -65,9 +89,46 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
         raise HTTPException(status_code=400, detail=f"Ошибка декодирования изображения: {str(e)}")
 
 
+def run_yolo_detection(image: np.ndarray, confidence_threshold: float) -> list:
+    """
+    Выполнение детекции с помощью YOLOv8
+    Возвращает результаты детекции в формате API
+    """
+    global model
+    
+    if model is None:
+        # Если модель не загружена, используем заглушку
+        logger.warning("Модель не загружена, используется заглушка")
+        return mock_detection(image, confidence_threshold)
+    
+    try:
+        # Запускаем детекцию
+        results = model(image, conf=confidence_threshold, verbose=False)
+        
+        detections = []
+        if len(results) > 0 and len(results[0].boxes) > 0:
+            for box in results[0].boxes:
+                cls = int(box.cls[0])
+                conf = float(box.conf[0])
+                bbox = box.xyxy[0].cpu().numpy()
+                class_name = model.names[cls]
+                
+                detections.append({
+                    'class_id': cls,
+                    'class_name': class_name,
+                    'confidence': conf,
+                    'bbox': [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])]
+                })
+        
+        return detections
+    except Exception as e:
+        logger.error(f"Ошибка при детекции YOLOv8: {e}", exc_info=True)
+        raise
+
+
 def mock_detection(image: np.ndarray, confidence_threshold: float) -> list:
     """
-    Заглушка детекции для тестирования API
+    Заглушка детекции для тестирования API (используется если модель не загружена)
     Возвращает тестовые результаты детекции
     """
     h, w = image.shape[:2]
@@ -105,8 +166,8 @@ async def test_detect(request: Base64ImageRequest):
         image = decode_base64_image(request.image)
         image_shape = list(image.shape)
         
-        # Выполнение детекции (заглушка)
-        detections = mock_detection(image, request.confidence_threshold)
+        # Выполнение детекции с помощью YOLOv8
+        detections = run_yolo_detection(image, request.confidence_threshold)
         
         # Время обработки
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
