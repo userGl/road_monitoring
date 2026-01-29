@@ -31,4 +31,11 @@ convert_pdf_to_md.py
 convert_word_to_md.py
 Tasks.docx
 projects/
-.python-version
+
+.python-version/
+
+/training/
+
+yolo8s.pt
+yolov8n.pt
+yolo26n.pt
