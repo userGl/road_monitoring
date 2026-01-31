@@ -10,6 +10,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
+import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from ultralytics import YOLO
@@ -23,19 +24,32 @@ app = FastAPI(title="Road Damage Detection API")
 
 # Загрузка модели YOLOv8 при старте приложения
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/best.pt")
-MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch51.pt")
+MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch50.pt")
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/YOLOv8_Small_v1.pt")
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/yolov8s.pt")
 model = None
+device = None
+
+def get_device():
+    """Определение устройства для инференса (GPU или CPU)"""
+    if torch.cuda.is_available():
+        device_id = 0
+        device_name = torch.cuda.get_device_name(0)
+        logger.info(f"CUDA доступна. Используется GPU: {device_name}")
+        return device_id
+    else:
+        logger.warning("CUDA недоступна. Используется CPU (инференс будет медленнее)")
+        return "cpu"
 
 def load_model():
-    """Загрузка модели YOLOv8"""
-    global model
+    """Загрузка модели YOLO"""
+    global model, device
     try:
         if os.path.exists(MODEL_PATH):
             logger.info(f"Загрузка модели: {MODEL_PATH}")
+            device = get_device()
             model = YOLO(MODEL_PATH)
-            logger.info("Модель успешно загружена")
+            logger.info(f"Модель успешно загружена. Устройство для инференса: {device}")
         else:
             logger.warning(f"Модель не найдена: {MODEL_PATH}. Пожалуйста, проверьте путь к модели."
             )
@@ -51,7 +65,7 @@ load_model()
 class Base64ImageRequest(BaseModel):
     """Запрос с base64 изображением"""
     image: str  # base64 encoded image
-    confidence_threshold: Optional[float] = 0.6
+    confidence_threshold: Optional[float] = 0.3
 
 
 class DetectionResult(BaseModel):
@@ -95,7 +109,7 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
 
 def run_yolo_detection(image: np.ndarray, confidence_threshold: float) -> list:
     """
-    Выполнение детекции с помощью YOLOv8
+    Выполнение детекции с помощью YOLO
     Возвращает результаты детекции в формате API
     """
     global model
@@ -108,8 +122,11 @@ def run_yolo_detection(image: np.ndarray, confidence_threshold: float) -> list:
         )
     
     try:
-        # Запускаем детекцию
-        results = model(image, conf=confidence_threshold, verbose=False)
+        # Запускаем детекцию с явным указанием устройства
+        global device
+        if device is None:
+            device = get_device()
+        results = model(image, conf=confidence_threshold, device=device, verbose=False)
         
         detections = []
         if len(results) > 0 and len(results[0].boxes) > 0:

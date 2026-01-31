@@ -62,7 +62,7 @@ project_root/
 3. Клонируйте репозиторий:
 ```bash
 git clone https://github.com/userGl/road_monitoring
-cd <ИМЯ_ПАПКИ_ПРОЕКТА>
+cd road_monitoring
 ```
 
 4. Создайте виртуальное окружение:
@@ -80,6 +80,37 @@ source .venv/bin/activate
 ```
 
 6. Установите зависимости:
+   
+   **Установите PyTorch с нужной версией CUDA:**
+   
+   ```bash
+   # Проверьте версию CUDA: 
+   nvidia-smi
+   
+   # Для CUDA 13.0:
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+   
+   # Для CUDA 12.8:
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+   
+   # Для CUDA 12.6:
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+   
+   # Для CUDA 12.1:
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+   
+   # Для CUDA 11.8:
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+   
+   # Для CPU (если нет GPU):
+   pip install torch torchvision
+   ```
+   
+   **Важно:** 
+   - Сначала установите PyTorch, затем остальные зависимости
+   - Для актуальной информации о совместимых версиях используйте официальный сайт: https://pytorch.org/get-started/locally/
+
+
 ```bash
 pip install -r requirements.txt
 ```
