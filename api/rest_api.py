@@ -22,7 +22,10 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Road Damage Detection API")
 
 # Загрузка модели YOLOv8 при старте приложения
-MODEL_PATH = os.getenv("MODEL_PATH", "models/YOLOv8_Small_v1.pt")
+# MODEL_PATH = os.getenv("MODEL_PATH", "models/best.pt")
+MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch51.pt")
+# MODEL_PATH = os.getenv("MODEL_PATH", "models/YOLOv8_Small_v1.pt")
+# MODEL_PATH = os.getenv("MODEL_PATH", "models/yolov8s.pt")
 model = None
 
 def load_model():
@@ -34,7 +37,8 @@ def load_model():
             model = YOLO(MODEL_PATH)
             logger.info("Модель успешно загружена")
         else:
-            logger.warning(f"Модель не найдена: {MODEL_PATH}. Используется заглушка.")
+            logger.warning(f"Модель не найдена: {MODEL_PATH}. Пожалуйста, проверьте путь к модели."
+            )
             model = None
     except Exception as e:
         logger.error(f"Ошибка загрузки модели: {e}")
@@ -97,9 +101,11 @@ def run_yolo_detection(image: np.ndarray, confidence_threshold: float) -> list:
     global model
     
     if model is None:
-        # Если модель не загружена, используем заглушку
-        logger.warning("Модель не загружена, используется заглушка")
-        return mock_detection(image, confidence_threshold)
+        logger.error(f"Модель не загружена: {MODEL_PATH}")
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Модель не найдена: {MODEL_PATH}. Пожалуйста, проверьте путь к модели."
+        )
     
     try:
         # Запускаем детекцию
@@ -124,33 +130,6 @@ def run_yolo_detection(image: np.ndarray, confidence_threshold: float) -> list:
     except Exception as e:
         logger.error(f"Ошибка при детекции YOLOv8: {e}", exc_info=True)
         raise
-
-
-def mock_detection(image: np.ndarray, confidence_threshold: float) -> list:
-    """
-    Заглушка детекции для тестирования API (используется если модель не загружена)
-    Возвращает тестовые результаты детекции
-    """
-    h, w = image.shape[:2]
-    
-    # Тестовые детекции
-    detections = [
-        {
-            'class_id': 3,
-            'class_name': 'D40',
-            'confidence': 0.85,
-            'bbox': [w * 0.2, h * 0.3, w * 0.4, h * 0.5]
-        },
-        {
-            'class_id': 0,
-            'class_name': 'D00',
-            'confidence': 0.72,
-            'bbox': [w * 0.6, h * 0.4, w * 0.9, h * 0.45]
-        }
-    ]
-    
-    # Фильтруем по confidence
-    return [d for d in detections if d['confidence'] >= confidence_threshold]
 
 
 @app.post("/api/v1/test/detect", response_model=DetectionResponse)

@@ -1,95 +1,221 @@
-Схема ПО проекта:
-road-damage-edge/
-├── main.py                 # Главный цикл
-├── config.yaml             # Конфигурация
-├── models/
-│   └── yolo2.rknn   # YOLOv8
-├── api/
-│   └── rest_api.py         # FastAPI endpoints
-├── storage/
-│   ├── minio_client.py     # S3 upload
-│   └── sqlite_db.py        # events.db
-├── messenger/
-│   ├── mqqt_client.py     # отправка сообщений через MQQT
-│── sensors/
-│   ├── camera.py           # RTSP 
-│   ├── gnss.py             #
-│   └── imu.py              # 
-├── road-damage.service     # systemd
-└── requirements.txt
-Установкп ПО
-1. Установка (RK3588 Yocto)
-sudo mkdir -p /opt/road-damage
-sudo cp -r road-damage-edge/* /opt/road-damage/
-cd /opt/road-damage
-2. Зависимости
-sudo pip3 install opencv-python rknn-toolkit2 paho-mqtt pyyaml boto3 fastapi uvicorn
-3. Разрешения
-sudo chown -R root:root /opt/road-damage
-sudo chmod +x main.py
-4. Systemd
-sudo cp road-damage.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable road-damage-edge
-sudo systemctl start road-damage-edge
-5. Мониторинг
-sudo journalctl -u road-damage-edge -f
-sudo systemctl status road-damage-edge
+## Детекция дефектов дорожного полотна (MVP)
 
-Паплайн обработки видеопотока (черновик)
-Видеопоток RTSP 1080p@30fps
-↓
-Предобработка (OpenCV+RGA, RK3588)
-├── Resize 1080p→640x640 (аппаратно)
-├── Нормализация RGB [0,1]
-└── Изменчивость освещения (CLAHE)
-Сегментация сцены (Cityscapes U-Net)  
-└── Маска дороги (mIoU≥0.82) → ROI
-Детекция дефектов (YOLOv8-Seg, RDD2022)
-├── Input: кадр × маска дороги
-├── Output: bbox + маска дефекта + класс (D00-D40)
-└── Фильтр confidence ≥0.6
-Классификация риска (FR-2)
-├── Размер: bbox → метры (калибровка Cityscapes)
-├── Тип: трещина/яма → риск
-└── Коэффициент: IMU тряска × геометрия
-Геопривязка (FR-3)
-├── GPS WGS84 (RTK ≤3м RMS)
-├── IMU offset для центра bbox
-└── Timestamp синхронизация
-Событие (SQLite + MQTT/MinIO)
-└── Критический: немедленная отправка
-Критический: ежедневная синхронизация
-Блок-схема (черновик):
-RTSP → [Предобработка] → [Cityscapes: маска дороги] → [YOLOv8: дефекты]
-↓                                        ↓
-GPS/IMU ← [Геопривязка] ← [Классификация] ← [Метрики дефекта]
-↓
-[SQLite/MQTT/MinIO]
-Ограничения и интерфейсы
-Система по умолчанию работает в автономном режиме. Одноплатный компьютер самостоятельно захватывает видеопоток (RTSP 1080p30fps), получает данные от ИИБ и ГНСС, выполняет детекцию и классификацию дефектов с помощью нейросети и автоматически генерирует и логирует события.
-События высокой и критической важности сразу отправляются на сервер с помощью протокола MQTT 5.0 в формате GeoJSON. Фото и видео таких событий так же сразу отправляется на сервер с помощью протокола MinIO.
-Протокол RestAPI используется для мониторинга состояния системы, настройки, тестирование работы нейросети и синхронизации событий с сервером.
-Интерфейсы ввода
-Рабочий режим:
-├── Камера: RTSP://  (H.264 1080p30)
-├── IMU
-└── GNSS
-Интерфейсы вывода
-Критические события (Риск высокий/критический):
-├── MQTT 5.0: road-damage/{vehicle_id}/evt-{event_id}-GeoJSON
-└── MinIO S3:   ┬── s3://events/{vehicle_id}/evt-{event_id}.mp4
-└── s3://events/{vehicle_id}/evt-{event_id}.jpg
-Обычные события. Синхронизация ежедневно или по запросу:
-└── REST sync: POST /api/v1/sync
-├── MinIO S3://events/{vehicle_id}/evt-{event_id}.mp4
-├── MinIO S3://events/{vehicle_id}/evt-{event_id}.jpg
-└── MinIO S3://events/{vehicle_id}/evt-{event_id}-GeoJSON
-Архитектура    REST API Endpoints
-REST API endpoints (Базовый URL: http://edge.local:8080/api/v1/):
-├── GET /api/v1/status — мониторинг работы системы (CPU/FPS/MinIO/MQTT)
-├── GET /api/v1/config — текущая конфигурация системы
-├── PUT /api/v1/config — обновление конфигурации системы
-├── GET /api/v1/events — список событий SQLite (фильтр по времени/риску)
-├── POST /api/v1/sync — синхронизация обычных событий с MinIO
-└── POST /api/v1/test/detect — тест детекции (POST base64 image)
+Минимальный прототип сервиса для детекции дефектов дорожного полотна с помощью модели YOLO, доступный через REST API и Jupyter Notebook.
+
+---
+
+### 1. Описание проекта
+
+Проект представляет собой микросервис на FastAPI с одним endpoint'ом `/api/v1/test/detect`, который принимает изображение дороги в формате base64 и возвращает список обнаруженных дефектов с координатами и уверенностью модели.  
+Для наглядной демонстрации предусмотрен Jupyter-ноутбук, который отправляет запросы к API, визуализирует результаты детекции и выводит базовые метрики времени обработки.
+
+#### Основная задача MVP
+
+Показать сквозной сценарий: от входного изображения до JSON-ответа сервиса и визуализации детекций.
+
+---
+
+### 2. Структура репозитория
+
+```text
+project_root/
+├── main.py              # Главный цикл
+├── api/
+│   └── rest_api.py      # FastAPI приложение с endpoint /api/v1/test/detect
+├── jupyter.ipynb        # Демонстрационный Jupyter Notebook
+├── models/
+│   └── epoch51.pt       # Файл модели YOLO
+├── test_images/         # Тестовые изображения дорог
+├── requirements.txt     # Зависимости Python
+├── README.md            # Документация проекта
+└── Changelog.md         # История версий
+```
+
+**Ключевые компоненты:**
+
+- `rest_api.py` — FastAPI-приложение, загрузка модели YOLOv8 и обработка запросов.
+- `jupyter.ipynb` / `jupyter.py` — отправка изображений на API, визуализация боксов и вывод статистики по детекциям.
+- `models` — папка с весами обученной модели для детекции дефектов дорожного полотна.
+
+---
+
+### 3. Скриншоты и демонстрация
+
+ To be done
+
+---
+
+### 4. Установка и зависимости
+
+#### 4.1. Требования
+
+- Поддерживаемая ОС: Linux / Windows
+- Python 3.12
+- Установленный Git
+- Желательно наличие GPU (CUDA) для ускорения детекции, но MVP может работать и на CPU.
+
+
+#### 4.2. Виртуальное окружение и зависимости
+
+1. Создайте папку проекта.
+2. В папке проекта откройте терминал командной строки.
+3. Клонируйте репозиторий:
+```bash
+git clone https://github.com/userGl/road_monitoring
+cd <ИМЯ_ПАПКИ_ПРОЕКТА>
+```
+
+4. Создайте виртуальное окружение:
+```bash
+python -m venv .venv
+```
+
+5. Активируйте виртуальное окружение:
+```bash
+# Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+6. Установите зависимости:
+```bash
+pip install -r requirements.txt
+```
+
+
+#### 4.3. Веса модели
+
+Необходимо скачать веса модели по ссылке:  
+https://cloud.mail.ru/public/1WAH/jp92kHqw2
+
+
+и поместить файл в папку `models` проекта.
+
+---
+
+### 5. Запуск сервиса
+
+1. В папке проекта откройте терминал командной строки.
+2. Активируйте виртуальное окружение:
+```bash
+# Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+3. Запустите сервис:
+```bash
+python main.py
+```
+
+
+---
+
+### 6. Использование API
+
+#### 6.1. Endpoint детекции
+
+```text
+POST /api/v1/test/detect
+```
+
+Тест детекции дефектов дорожного полотна.
+
+**Тело запроса (JSON):**
+
+```json
+{
+  "image": "<base64-строка JPEG/PNG изображения>",
+  "confidence_threshold": 0.6
+}
+```
+
+**Параметры:**
+
+- `image` — строка с изображением в base64 без префикса или в формате `data:image/jpeg;base64,...` (префикс будет автоматически отброшен).
+- `confidence_threshold` — необязательный порог уверенности детекции (по умолчанию 0.6).
+
+**Пример запроса с curl (Linux/macOS):**
+
+```bash
+IMAGE_B64=$(python - << 'EOF'
+import base64
+from pathlib import Path
+
+with open("test_images/Czech_002942.jpg", "rb") as f:
+    print(base64.b64encode(f.read()).decode("utf-8"))
+EOF
+)
+
+curl -X POST "http://localhost:8080/api/v1/test/detect" \
+  -H "Content-Type: application/json" \
+  -d "{\"image\": \"${IMAGE_B64}\", \"confidence_threshold\": 0.4}"
+```
+
+**Пример ответа:**
+
+```json
+{
+  "success": true,
+  "timestamp": "2025-01-31T12:00:00.000000",
+  "image_shape":,[^3]
+  "detections": [
+    {
+      "class_id": 0,
+      "class_name": "pothole",
+      "confidence": 0.87,
+      "bbox": [100.5, 200.3, 300.7, 400.9]
+    }
+  ],
+  "processing_time_ms": 45.21,
+  "message": "Обнаружено дефектов: 1"
+}
+```
+
+**Структура ответа** задаётся моделью `DetectionResponse`:
+
+- `success` — флаг успешной обработки;
+- `timestamp` — время обработки запроса;
+- `image_shape` — размеры входного изображения `[height, width, channels]`;
+- `detections` — список детекций (`class_id`, `class_name`, `confidence`, `bbox`);
+- `processing_time_ms` — время обработки в миллисекундах;
+- `message` — текстовое сообщение, в т.ч. с количеством найденных дефектов.
+
+---
+
+### 7. Демонстрация в Jupyter Notebook
+
+В репозитории предусмотрен демонстрационный ноутбук `jupyter.ipynb`, который:
+
+- загружает тестовое изображение дороги из `test_images/`;
+- отображает исходное изображение;
+- конвертирует его в base64 и отправляет POST-запрос на `/api/v1/test/detect`;
+- выводит в консоль число найденных дефектов, время обработки и подробности по каждому `bbox`;
+- визуализирует все детекции поверх исходного изображения с подписями классов и уверенностью.
+
+**Запуск (пример):**
+
+```bash
+# В активированном виртуальном окружении в папке проекта выполните:
+jupyter lab
+# или
+jupyter notebook
+```
+
+Затем откройте `jupyter.ipynb`, убедитесь, что:
+
+```python
+API_URL = "http://localhost:8080/api/v1/test/detect"
+```
+
+и выполните все ячейки.
+
+---
+
+### 8. Тестирование и метрики
+
+Пайплайн обучения и тестирования модели находится в папке `training`

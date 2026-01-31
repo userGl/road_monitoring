@@ -1,5 +1,5 @@
 """
-Главный файл для запуска REST API сервера
+Файл для запуска REST API сервера
 """
 import uvicorn
 from api.rest_api import app
