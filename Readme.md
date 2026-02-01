@@ -67,7 +67,7 @@ cd road_monitoring
 
 4. Создайте виртуальное окружение:
 ```bash
-python -m venv .venv
+python3.12 -m venv .venv
 ```
 
 5. Активируйте виртуальное окружение:
@@ -233,8 +233,7 @@ curl -X POST "http://localhost:8080/api/v1/test/detect" \
 ```bash
 # В активированном виртуальном окружении в папке проекта выполните:
 jupyter lab
-# или
-jupyter notebook
+
 ```
 
 Затем откройте `jupyter.ipynb`, убедитесь, что:

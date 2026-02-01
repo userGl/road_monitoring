@@ -42,4 +42,7 @@ yolo26n.pt
 Readme_old.md
 jupyter.py
 yolov8s.pt
-models/epoch50.pt
+models/
+.venv
+.ipynb_checkpoints
+

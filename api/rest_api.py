@@ -24,7 +24,7 @@ app = FastAPI(title="Road Damage Detection API")
 
 # Загрузка модели YOLOv8 при старте приложения
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/best.pt")
-MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch50.pt")
+MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch40.pt")
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/YOLOv8_Small_v1.pt")
 # MODEL_PATH = os.getenv("MODEL_PATH", "models/yolov8s.pt")
 model = None
