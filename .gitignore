@@ -34,7 +34,10 @@ projects/
 
 .python-version/
 
-/training/
+training/*
+!training/training_pictures/**
+!training/*.ipynb
+!training/results_raw.xlsx
 
 yolo8s.pt
 yolov8n.pt
@@ -42,7 +45,8 @@ yolo26n.pt
 Readme_old.md
 jupyter.py
 yolov8s.pt
-models/
+models/*
 .venv
 .ipynb_checkpoints
+
 
