@@ -6,8 +6,8 @@ from api.rest_api import app
 
 if __name__ == "__main__":
     uvicorn.run(
-        app,
+        app,thon 
         host="0.0.0.0",
-        port=8080,
+        port=8085,
         log_level="info"
     )
