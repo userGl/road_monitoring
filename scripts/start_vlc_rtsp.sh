@@ -34,9 +34,7 @@ if [[ ! -f "$video_path" ]]; then
   exit 1
 fi
 
-if command -v cvlc >/dev/null 2>&1; then
-  VLC_BIN="cvlc"
-elif command -v vlc >/dev/null 2>&1; then
+if command -v vlc >/dev/null 2>&1; then
   VLC_BIN="vlc"
 else
   echo "VLC not found in PATH"

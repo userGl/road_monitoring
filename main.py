@@ -20,7 +20,7 @@ def main():
     api_thread = threading.Thread(target=run_api, daemon=True)
     api_thread.start()
 
-    rtsp_url = "rtsp://user:pass@192.168.1.10:554/stream"
+    rtsp_url = "rtsp://127.0.0.1:8554/live"
     camera = RTSPCamera(rtsp_url)
 
     print("[main] RTSP preview started, API on :8080")
