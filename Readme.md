@@ -4,9 +4,6 @@
 
 ---
 
-
-
-
 ### 1. Описание проекта
 
 Проект представляет собой микросервис на FastAPI с одним endpoint'ом `/api/v1/test/detect`, который принимает изображение дороги в формате base64 и возвращает список обнаруженных дефектов с координатами и уверенностью модели.  
@@ -33,7 +30,12 @@ road-damage-edge/
 │    ├── gnss.py             # чтение геопозиции (ГНСС)
 │    └── imu.py              # чтение инерциальных данных (ИИБ)
 ├── road-damage.service     # unit-файл systemd для автозапуска
-└── requirements.txt        # зависимости Python
+├── requirements.txt        # зависимости Python
+├── scripts/
+│   ├── start_vlc_rtsp.ps1   # скрипт запуска VLC для трансляции RTSP потока Windows
+│   └── start_vlc_rtsp.sh    # скрипт запуска VLC для трансляции RTSP потока Linux
+└── test_videos/
+    └── video_1.mkv          # видео отправляемое в RTSP поток
 
 Краткое описание модулей:  
 - main.py реализует главный цикл обработки: инициализацию конфигурации, загрузку модели, запуск потоков чтения датчиков и сервисов интеграции;  
@@ -87,7 +89,6 @@ POST /sync — инициирование синхронизации событ�
 POST /test/detect — тестовый endpoint для детекции по одиночному изображению (base64), используемый в MVP‑прототипе и для отладки модели.
 ```
 
-
 #### Основная задача MVP
 
 Показать сквозной сценарий: от входного изображения до JSON-ответа сервиса и визуализации детекций.
@@ -133,23 +134,25 @@ project_root/
 - Установленный Git
 - Желательно наличие GPU (CUDA) для ускорения детекции, но MVP может работать и на CPU.
 
-
 #### 4.2. Виртуальное окружение и зависимости
 
 1. Создайте папку проекта.
 2. В папке проекта откройте терминал командной строки.
 3. Клонируйте репозиторий:
+
 ```bash
 git clone https://github.com/userGl/road_monitoring
 cd road_monitoring
 ```
 
-4. Создайте виртуальное окружение:
+1. Создайте виртуальное окружение:
+
 ```bash
 python3.12 -m venv .venv
 ```
 
-5. Активируйте виртуальное окружение:
+1. Активируйте виртуальное окружение:
+
 ```bash
 # Linux
 source .venv/bin/activate
@@ -158,48 +161,20 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-6. Установите зависимости:
-   
-   **Установите PyTorch с нужной версией CUDA:**
-   
-   ```bash
-   # Проверьте версию CUDA: 
-   nvidia-smi
-   
-   # Для CUDA 13.0:
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
-   
-   # Для CUDA 12.8:
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-   
-   # Для CUDA 12.6:
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-   
-   # Для CUDA 12.1:
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
-   
-   # Для CUDA 11.8:
-   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-   
-   # Для CPU (если нет GPU):
-   pip install torch torchvision
-   ```
-   
+1. Установите зависимости:
+  **Установите PyTorch с нужной версией CUDA:**
    **Важно:** 
-   - Сначала установите PyTorch, затем остальные зависимости
-   - Для актуальной информации о совместимых версиях используйте официальный сайт: https://pytorch.org/get-started/locally/
-
+  - Сначала установите PyTorch, затем остальные зависимости
+  - Для актуальной информации о совместимых версиях используйте официальный сайт: [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/)
 
 ```bash
 pip install -r requirements.txt
 ```
 
-
 #### 4.3. Веса модели
 
 Необходимо скачать веса модели по ссылке:  
-https://cloud.mail.ru/public/1WAH/jp92kHqw2
-
+[https://cloud.mail.ru/public/1WAH/jp92kHqw2](https://cloud.mail.ru/public/1WAH/jp92kHqw2)
 
 и поместить файл в папку `models` проекта.
 
@@ -209,6 +184,7 @@ https://cloud.mail.ru/public/1WAH/jp92kHqw2
 
 1. В папке проекта откройте терминал командной строки.
 2. Активируйте виртуальное окружение:
+
 ```bash
 # Linux
 source .venv/bin/activate
@@ -217,11 +193,11 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-3. Запустите сервис:
+1. Запустите сервис:
+
 ```bash
 python main.py
 ```
-
 
 ---
 

@@ -1,1 +1,7 @@
 # Конфигурация сервиса
+
+# Конфигурация VLC для отправки RTSP потока
+vlc:
+  video: "test_videos/video_1.mkv" # Путь к видео файлу
+  rtsp_port: 8554 # Порт для RTSP потока
+  rtsp_path: "live" # Путь к RTSP потоку
