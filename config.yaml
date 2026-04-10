@@ -1,9 +1,13 @@
 # Конфигурация сервиса
 
-# Конфигурация VLC для отправки RTSP потока
+# Конфигурация VLC для отправки RTSP потока для тестирования
+# Настройки ниже используются скриптами start_vlc_rtsp.sh и start_vlc_rtsp.ps1
+# Непосредственно на работу сервиса не влияют
 vlc:
   # Путь к видео файлу
-  video: test_videos/mister-i-missis-smit-2005_1.mkv
+  # video: test_videos/mister-i-missis-smit-2005_1.mkv
+  # video: test_videos/video_1_edit.mkv
+  video: test_videos/clean_video_1_h264.mp4
   # Порт для RTSP потока
   rtsp_port: 8554
   # Путь к RTSP потоку

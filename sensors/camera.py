@@ -30,16 +30,27 @@ class RTSPCamera:
         self._cap: Optional[cv2.VideoCapture] = None
         self._last_ok_read_time: float = 0.0
 
-    def open(self) -> bool:
-        """Открыть RTSP-поток."""
-        self.release()
-        self._cap = cv2.VideoCapture(self.rtsp_url)
-        ok = bool(self._cap and self._cap.isOpened())
-        if ok:
-            self._last_ok_read_time = time.time()
-        else:
-            print(f"[camera] failed to open RTSP stream: {self.rtsp_url}")
-        return ok
+def open(self) -> bool:
+    """Открыть RTSP-поток."""
+    self.release()
+
+    # формируем URL с параметрами транспорта и буфера
+    rtsp_url = (
+        f"{self.rtsp_url}"
+        "?rtsp_transport=tcp"
+        "&max_delay=500000"
+        "&buffer_size=1048576"
+    )
+
+    # Явно используем FFmpeg backend
+    self._cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+
+    ok = bool(self._cap and self._cap.isOpened())
+    if ok:
+        self._last_ok_read_time = time.time()
+    else:
+        print(f"[camera] failed to open RTSP stream: {rtsp_url}")
+    return ok
 
     def release(self) -> None:
         """Освободить ресурс камеры."""
