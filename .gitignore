@@ -52,4 +52,4 @@ models/*
 .venv
 .ipynb_checkpoints
 
-
+sensors/ffmpeg_camera_readme.md
