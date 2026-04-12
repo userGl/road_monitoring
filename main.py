@@ -1,10 +1,11 @@
 # main.py Для начала пробуем запустить только RTSP preview и REST API
+# main.py
 import threading
 import cv2
 import uvicorn
 
 from api.rest_api import app
-from sensors.camera import RTSPCamera
+from sensors.ffmpeg_camera import FFmpegRTSPCamera
 
 
 def run_api():
@@ -21,18 +22,36 @@ def main():
     api_thread.start()
 
     rtsp_url = "rtsp://127.0.0.1:8554/live"
-    camera = RTSPCamera(rtsp_url)
+    camera = FFmpegRTSPCamera(rtsp_url, use_hwaccel=True)
 
-    print("[main] RTSP preview started, API on :8080")
+    print("[main] RTSP preview started, API on :8081")
+
+    meta_printed = False
 
     try:
-        for frame in camera.frames():
-            cv2.imshow("RoadDamage RTSP", frame)
+        for packet in camera.frames():
+            frame = packet.frame
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == 27:
-                print("[main] ESC pressed, exiting...")
-                break
+            if not meta_printed and camera.meta is not None:
+                print(f"[main] Video meta: {camera.meta}")
+                meta_printed = True
+
+           
+            # if packet.frame_id % 30 == 0:
+            #     print(
+            #         f"[main] frame_id={packet.frame_id}, "
+            #         f"ts_monotonic={packet.ts_monotonic:.6f}, "
+            #         f"ts_wall={packet.ts_wall:.6f}"
+            #     )
+
+            if packet.frame_id % 2 == 0:
+                cv2.imshow("RoadDamage RTSP", frame)
+
+                key = cv2.waitKey(1) & 0xFF
+                if key == 27:
+                    print("[main] ESC pressed, exiting...")
+                    break
+
     finally:
         camera.release()
         cv2.destroyAllWindows()
