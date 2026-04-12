@@ -53,3 +53,4 @@ models/*
 .ipynb_checkpoints
 
 sensors/ffmpeg_camera_readme.md
+sensors/camera.py

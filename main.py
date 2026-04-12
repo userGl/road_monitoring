@@ -1,11 +1,9 @@
-# main.py Для начала пробуем запустить только RTSP preview и REST API
-# main.py
 import threading
-import cv2
 import uvicorn
 
 from api.rest_api import app
 from sensors.ffmpeg_camera import FFmpegRTSPCamera
+from sensors.rtsp_streamer import RTSPStreamer, RTSPStreamerConfig
 
 
 def run_api():
@@ -17,16 +15,50 @@ def run_api():
     )
 
 
+def build_streamer(output_rtsp_url: str, camera_meta, frame):
+    if camera_meta is not None:
+        width = int(camera_meta.width)
+        height = int(camera_meta.height)
+        fps = int(camera_meta.fps) if camera_meta.fps else 25
+    else:
+        height, width = frame.shape[:2]
+        fps = 25
+
+    streamer = RTSPStreamer(
+        RTSPStreamerConfig(
+            url=output_rtsp_url,
+            width=width,
+            height=height,
+            fps=fps,
+            bitrate="2M",
+            preset="veryfast",
+            transport="tcp",
+            resize_if_needed=True,
+        )
+    )
+    streamer.start()
+
+    print(
+        f"[main] RTSP output started: {output_rtsp_url} "
+        f"({width}x{height} @ {fps} fps)"
+    )
+
+    return streamer
+
+
 def main():
     api_thread = threading.Thread(target=run_api, daemon=True)
     api_thread.start()
 
-    rtsp_url = "rtsp://127.0.0.1:8554/live"
-    camera = FFmpegRTSPCamera(rtsp_url, use_hwaccel=True)
+    input_rtsp_url = "rtsp://127.0.0.1:8554/live"
+    output_rtsp_url = "rtsp://127.0.0.1:8554/preview"
 
-    print("[main] RTSP preview started, API on :8081")
+    camera = FFmpegRTSPCamera(input_rtsp_url, use_hwaccel=True)
+
+    print("[main] RTSP input started, API on :8081")
 
     meta_printed = False
+    streamer = None
 
     try:
         for packet in camera.frames():
@@ -36,25 +68,16 @@ def main():
                 print(f"[main] Video meta: {camera.meta}")
                 meta_printed = True
 
-           
-            # if packet.frame_id % 30 == 0:
-            #     print(
-            #         f"[main] frame_id={packet.frame_id}, "
-            #         f"ts_monotonic={packet.ts_monotonic:.6f}, "
-            #         f"ts_wall={packet.ts_wall:.6f}"
-            #     )
+            if streamer is None:
+                streamer = build_streamer(output_rtsp_url, camera.meta, frame)
 
-            if packet.frame_id % 2 == 0:
-                cv2.imshow("RoadDamage RTSP", frame)
-
-                key = cv2.waitKey(1) & 0xFF
-                if key == 27:
-                    print("[main] ESC pressed, exiting...")
-                    break
+            if packet.frame_id % 1 == 0:
+                streamer.write(frame)
 
     finally:
+        if streamer is not None:
+            streamer.stop()
         camera.release()
-        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
