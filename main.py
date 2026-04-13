@@ -1,3 +1,4 @@
+# main.py
 import threading
 import uvicorn
 
@@ -5,25 +6,19 @@ from api.rest_api import app
 from sensors.ffmpeg_camera import FFmpegRTSPCamera
 from sensors.rtsp_streamer import RTSPStreamer, RTSPStreamerConfig
 
+from pipeline.core import VideoPipeline
+from pipeline.stages import ResizeStage
+
+
+PREVIEW_WIDTH = 640
+PREVIEW_HEIGHT = 640
+
 
 def run_api():
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8081,
-        log_level="info",
-    )
+    uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
 
 
-def build_streamer(output_rtsp_url: str, camera_meta, frame):
-    if camera_meta is not None:
-        width = int(camera_meta.width)
-        height = int(camera_meta.height)
-        fps = int(camera_meta.fps) if camera_meta.fps else 25
-    else:
-        height, width = frame.shape[:2]
-        fps = 25
-
+def build_streamer(output_rtsp_url: str, width: int, height: int, fps: int = 25):
     streamer = RTSPStreamer(
         RTSPStreamerConfig(
             url=output_rtsp_url,
@@ -42,7 +37,6 @@ def build_streamer(output_rtsp_url: str, camera_meta, frame):
         f"[main] RTSP output started: {output_rtsp_url} "
         f"({width}x{height} @ {fps} fps)"
     )
-
     return streamer
 
 
@@ -54,11 +48,11 @@ def main():
     output_rtsp_url = "rtsp://127.0.0.1:8554/preview"
 
     camera = FFmpegRTSPCamera(input_rtsp_url, use_hwaccel=True)
-
     print("[main] RTSP input started, API on :8081")
 
     meta_printed = False
     streamer = None
+    pipeline = None
 
     try:
         for packet in camera.frames():
@@ -68,11 +62,26 @@ def main():
                 print(f"[main] Video meta: {camera.meta}")
                 meta_printed = True
 
-            if streamer is None:
-                streamer = build_streamer(output_rtsp_url, camera.meta, frame)
+            if pipeline is None:
+                pipeline = VideoPipeline(
+                    stages=[
+                        ResizeStage(width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT),
+                    ]
+                )
 
-            if packet.frame_id % 1 == 0:
-                streamer.write(frame)
+            if streamer is None:
+                fps = int(camera.meta.fps) if camera.meta is not None and camera.meta.fps else 25
+                streamer = build_streamer(
+                    output_rtsp_url,
+                    width=PREVIEW_WIDTH,
+                    height=PREVIEW_HEIGHT,
+                    fps=fps,
+                )
+
+            packet = pipeline.process(packet)
+
+            # Пока в preview отдаём кадр после resize
+            streamer.write(packet.resized_frame)
 
     finally:
         if streamer is not None:
