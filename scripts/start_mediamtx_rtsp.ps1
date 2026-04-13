@@ -21,7 +21,7 @@ if (-not (Test-Path $ConfigPath)) {
 # --- Чтение config.yaml ---
 
 # Поиск строки с video:
-$videoLine = Select-String -Path $ConfigPath -Pattern '^[\s]*video:' -SimpleMatch -ErrorAction SilentlyContinue |
+$videoLine = Select-String -Path $ConfigPath -Pattern '^[\s]*video:' -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
 if (-not $videoLine) {
@@ -106,7 +106,16 @@ if ($mediamtxRunning) {
     Write-Host "MediaMTX is already running in Docker"
 } else {
     Write-Host "Starting MediaMTX in Docker..."
-    docker run -d --rm --name mediamtx --network=host bluenviron/mediamtx:latest | Out-Null
+    docker run -d --rm `
+      --name mediamtx `
+      -e MTX_PROTOCOLS=tcp `
+      -p ${rtspPort}:8554 `
+      -p 1935:1935 `
+      -p 8888:8888 `
+      -p 8889:8889 `
+      -p 8890:8890/udp `
+      -p 8189:8189/udp `
+      bluenviron/mediamtx:latest | Out-Null
 }
 
 Write-Host "Waiting for RTSP server on $rtspUrl ..."
@@ -117,5 +126,12 @@ Write-Host "RTSP URL: $rtspUrl"
 
 # --- Запуск ffmpeg для публикации RTSP ---
 
-ffmpeg -re -stream_loop -1 -i "$videoPath" `
-  -c copy -f rtsp "$rtspUrl"
+ffmpeg `
+    -loglevel info `
+    -re `
+    -stream_loop -1 `
+    -i "$videoPath" `
+    -rtsp_transport tcp `
+    -c copy `
+    -f rtsp `
+    "$rtspUrl"
