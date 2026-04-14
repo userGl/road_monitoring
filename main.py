@@ -10,7 +10,8 @@ from sensors.ffmpeg_camera import FFmpegRTSPCamera
 from sensors.rtsp_streamer import create_rtsp_streamer
 
 from pipeline.core import VideoPipeline
-from pipeline.stages import ResizeStage
+from pipeline.stages import ResizeStage, YoloDetectionStage, DrawDetectionsStage
+from inference.yolo_detector import YoloDetector
 
 
 def load_config():
@@ -54,20 +55,21 @@ def main():
 
     meta_printed = False
     streamer = None
-    pipeline = None
+    detector = YoloDetector()
+
+    pipeline = VideoPipeline(
+        stages=[
+            ResizeStage(width=preview_width, height=preview_height),
+            YoloDetectionStage(detector=detector, conf=0.05),
+            DrawDetectionsStage(),
+        ]
+    )
 
     try:
         for packet in camera.frames():
             if not meta_printed and camera.meta is not None:
                 print(f"[main] Video meta: {camera.meta}")
                 meta_printed = True
-
-            if pipeline is None:
-                pipeline = VideoPipeline(
-                    stages=[
-                        ResizeStage(width=preview_width, height=preview_height),
-                    ]
-                )
 
             if enable_output_stream and streamer is None:
                 fps = int(camera.meta.fps) if camera.meta is not None and camera.meta.fps else 25
@@ -84,8 +86,16 @@ def main():
 
             packet = pipeline.process(packet)
 
+            frame_to_send = (
+                packet.annotated_frame
+                if packet.annotated_frame is not None
+                else packet.resized_frame
+                if packet.resized_frame is not None
+                else packet.frame
+            )
+
             if streamer is not None:
-                streamer.write(packet.resized_frame)
+                streamer.write(frame_to_send)
 
     finally:
         if streamer is not None:

@@ -4,8 +4,8 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass
-from typing import Generator, Optional
+from dataclasses import dataclass, field
+from typing import Generator, Optional, Any, Dict
 
 import numpy as np
 from subprocess import CalledProcessError
@@ -22,7 +22,6 @@ class VideoMeta:
     height: int
     fps: float
 
-
 @dataclass
 class FramePacket:
     """Пакет кадра с метаданными.
@@ -32,12 +31,19 @@ class FramePacket:
     - frame: сам кадр в формате BGR (H x W x 3);
     - ts_monotonic: время получения кадра (time.monotonic);
     - ts_wall: «часы реального мира» (time.time) для логов/БД.
+
+    - resized_frame: картинка с измененным размером для модели
+    - detections: список детекций
+    - annotated_frame: картинка с отмеченными детекциями
     """
     frame_id: int
     frame: np.ndarray
     ts_monotonic: float
     ts_wall: float
 
+    resized_frame: Optional[np.ndarray] = None
+    detections: list[Dict[str, Any]] = field(default_factory=list)
+    annotated_frame: Optional[np.ndarray] = None
 
 class FFmpegRTSPCamera:
     """Захват RTSP-потока через ffmpeg с авто-реконнектом.
