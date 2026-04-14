@@ -210,3 +210,28 @@ class RTSPStreamer:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
+
+def create_rtsp_streamer(
+    url: str,
+    width: int,
+    height: int,
+    fps: int = 25,
+    *,
+    bitrate: str = "2M",
+    preset: str = "veryfast",
+    transport: str = "tcp",
+    resize_if_needed: bool = True,
+) -> RTSPStreamer:
+    cfg = RTSPStreamerConfig(
+        url=url,
+        width=width,
+        height=height,
+        fps=fps,
+        bitrate=bitrate,
+        preset=preset,
+        transport=transport,
+        resize_if_needed=resize_if_needed,
+    )
+    streamer = RTSPStreamer(cfg)
+    streamer.start()
+    return streamer

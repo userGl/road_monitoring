@@ -1,14 +1,21 @@
 # Конфигурация сервиса
 
-# Конфигурация VLC для отправки RTSP потока для тестирования
-# Настройки ниже используются скриптами start_vlc_rtsp.sh и start_vlc_rtsp.ps1
-# Непосредственно на работу сервиса не влияют
+# Конфигурация тестового входного RTSP потока
+# Эти настройки используются скриптами публикации тестового видео
 vlc:
-  # Путь к видео файлу
-  # video: test_videos/mister-i-missis-smit-2005_1.mkv
-  # video: test_videos/video_1_edit.mkv
   video: test_videos/clean_video_1_h264.mp4
-  # Порт для RTSP потока
   rtsp_port: 8554
-  # Путь к RTSP потоку
   rtsp_path: live
+
+# Настройки Python-сервиса обработки видео
+stream:
+  input_rtsp_url: "rtsp://127.0.0.1:8554/live"
+  output_rtsp_url: "rtsp://127.0.0.1:8554/preview"
+  enable_output_stream: true
+
+camera:
+  use_hwaccel: false
+
+preview:
+  width: 640
+  height: 640
