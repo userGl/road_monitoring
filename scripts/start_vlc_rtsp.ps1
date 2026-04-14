@@ -1,4 +1,4 @@
-$projectRoot = Split-Path $PSScriptRoot -Parent
+﻿$projectRoot = Split-Path $PSScriptRoot -Parent
 $configPath = Join-Path $projectRoot "config.yaml"
 
 if (-not (Test-Path $configPath)) {

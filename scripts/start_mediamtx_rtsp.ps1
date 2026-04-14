@@ -1,4 +1,4 @@
-# start_mediamtx_rtsp.ps1
+﻿# start_mediamtx_rtsp.ps1
 #  для запуска mediamtx в Docker и публикации RTSP потока
 # необходимы docker и ffmpeg в PATH
 
