@@ -9,11 +9,11 @@ from ultralytics import YOLO
 
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch40.pt")
-
+# Значение по умолчанию, если путь не задан в конфиге
+DEFAULT_MODEL_PATH = os.getenv("MODEL_PATH", "models/epoch40.pt")
 
 class YoloDetector:
-    def __init__(self, model_path: str = MODEL_PATH):
+    def __init__(self, model_path: str = DEFAULT_MODEL_PATH):
         self.model_path = model_path
         self.device: str | int = self._get_device()
         self.model: YOLO | None = None
@@ -43,13 +43,33 @@ class YoloDetector:
         return self.model is not None
 
     def detect(
-        self,
-        image_bgr: np.ndarray,
-        confidence_threshold: float = 0.3,
-    ) -> list[dict[str, Any]]:
-        """
-        Выполнение детекции с помощью YOLO
-        Возвращает результаты детекции в формате API
+    self,
+    image_bgr: np.ndarray,
+    confidence_threshold: float = 0.3,
+) -> list[dict[str, Any]]:
+        """Выполняет детекцию объектов на одном BGR-изображении.
+
+        Подаёт входной кадр в модель YOLO и возвращает список детекций
+        в формате, удобном для REST API и дальнейшей обработки.
+
+        Args:
+            image_bgr: Входное изображение в формате OpenCV/Numpy (BGR).
+            confidence_threshold: Минимальный порог confidence для фильтрации
+                предсказаний модели.
+
+        Returns:
+            Список детекций. Каждый элемент — словарь вида:
+            {
+                "class_id": int,
+                "class_name": str,
+                "confidence": float,
+                "bbox": [x_min, y_min, x_max, y_max],
+            }
+
+            Если объектов не найдено, возвращается пустой список.
+
+        Raises:
+            RuntimeError: Если модель не была загружена.
         """
         if self.model is None:
             raise RuntimeError(f"Модель не загружена: {self.model_path}")

@@ -19,3 +19,6 @@ camera:
 preview:
   width: 640
   height: 640
+
+model:
+  path: models/epoch50.pt

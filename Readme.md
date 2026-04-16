@@ -9,43 +9,75 @@
 Проект представляет собой микросервис на FastAPI с одним endpoint'ом `/api/v1/test/detect`, который принимает изображение дороги в формате base64 и возвращает список обнаруженных дефектов с координатами и уверенностью модели.  
 Для наглядной демонстрации предусмотрен Jupyter-ноутбук, который отправляет запросы к API, визуализирует результаты детекции и выводит базовые метрики времени обработки.
 
-## update
+### 2. Структура репозитория
+
+#### Текущее состояние (`road_monitoring/`)
+
+Сейчас в репозитории реализовано следующее.
 
 ```text
-Дополняем MVP до полноценной версии. Планируемая структура проекта:  
-road-damage-edge/
-├── main.py                 # главный цикл сервиса
-├── config.yaml   # конфигурация сервиса
-├── models/
-│    └── yolo8.rknn  # YOLOv8-модель в формате RKNN
+road_monitoring/
+├── main.py
+├── config.yaml
+├── requirements.txt
+├── Readme.md
+├── models/                # в .gitignore; локально, напр. epoch50.pt (см. config.yaml)
 ├── api/
-│    └── rest_api.py  # FastAPI endpoints
-├── storage/
-│    ├── minio_client.py    # загрузка медиа и GeoJSON в S3/MinIO
-│    └── sqlite_db.py        # работа с локальной базой events.db
-├── messenger/
-│    └── mqtt_client.py     # отправка событий в MQTT-брокер
+│   └── rest_api.py
+├── pipeline/
+│   ├── core.py
+│   └── stages.py
+├── inference/
+│   └── yolo_detector.py
+├── core/
+│   └── frame_packet.py
 ├── sensors/
-│    ├── camera.py           # захват видеопотока по RTSP
-│    ├── gnss.py             # чтение геопозиции (ГНСС)
-│    └── imu.py              # чтение инерциальных данных (ИИБ)
-├── road-damage.service     # unit-файл systemd для автозапуска
-├── requirements.txt        # зависимости Python
+│   ├── ffmpeg_camera.py
+│   └── rtsp_streamer.py
 ├── scripts/
-│   ├── start_vlc_rtsp.ps1   # скрипт запуска VLC для трансляции RTSP потока Windows
-│   └── start_vlc_rtsp.sh    # скрипт запуска VLC для трансляции RTSP потока Linux
-└── test_videos/
-    └── video_1.mkv          # видео отправляемое в RTSP поток
-
-Краткое описание модулей:  
-- main.py реализует главный цикл обработки: инициализацию конфигурации, загрузку модели, запуск потоков чтения датчиков и сервисов интеграции;  
-- каталог api/ содержит FastAPI-приложение с REST-endpoint’ами используемыми внешними системами;  
-- подсистема storage/ отвечает за работу с локальной БД событий (sqlite_db.py);  
-выгрузку медиа и GeoJSON в S3-совместимое хранилище MinIO (minio_client.py);  
-- подсистема messenger/ инкапсулирует обмен сообщениями с MQTT-брокером (mqtt_client.py);  
-- sensors/ содержит драйверы для источников данных: видеопотока камеры (camera.py), геопозиции (gnss.py) и инерциальных измерений (imu.py);  
-- Unit-файл road-damage.service используется для развёртывания сервиса как systemd-службы на SoC RK3588, а requirements.txt  
+│   ├── start_mediamtx_rtsp.ps1
+│   ├── start_mediamtx_rtsp.sh
+│   ├── rtsp_view.ps1
+│   └── rtsp_view.sh
+├── test_videos/
+│   └── download_link.md
+└── training/                  # ноутбуки обучения, не обязательны для деплоя
 ```
+
+**Ключевые компоненты:**
+
+- `main.py` — точка входа: конфигурация, захват RTSP, пайплайн, REST API, при необходимости выходной RTSP.
+- `api/rest_api.py` — FastAPI, в т.ч. `/api/v1/test/detect`.
+- `pipeline/` — сборка стадий обработки видео (`core.py`, `stages.py`).
+- `inference/yolo_detector.py` — загрузка YOLO и инференс.
+- `core/frame_packet.py` — контейнер кадра для пайплайна.
+- `sensors/` — захват RTSP через FFmpeg и публикация превью-потока.
+- `scripts/` — вспомогательные сценарии для MediaMTX и просмотра RTSP.
+- `models/` — веса модели (каталог в `.gitignore`).
+- `training/` — ноутбуки обучения; для деплоя edge не обязательны.
+
+#### Планируемые дополнения (`road-damage-edge`)
+
+К полноценной edge-версии планируется **дописать** (ниже — только новые или меняющиеся части; `api/`, `pipeline/`, `inference/`, `core/`, актуальные модули `sensors/` и остальное из дерева выше сохраняются и развиваются).
+
+```text
+road-damage-edge/  (дополнения к road_monitoring/)
+├── models/
+│   └── yolo8.rknn              # YOLOv8 в формате RKNN для NPU
+├── storage/
+│   ├── minio_client.py         # медиа и GeoJSON в S3/MinIO
+│   └── sqlite_db.py            # локальная БД events.db
+├── messenger/
+│   └── mqtt_client.py          # события в MQTT-брокер
+├── sensors/
+│   ├── gnss.py                 # ГНСС
+│   └── imu.py                  # ИИБ
+├── road-damage.service         # systemd на SoC RK3588
+└── test_videos/
+    └── video_1.mkv             # тестовый материал для RTSP
+```
+
+Кратко: `storage/` — SQLite и MinIO; `messenger/` — MQTT; датчики — ГНСС и ИИБ; развёртывание — unit-файл systemd; модель на edge — RKNN.
 
 ```text
 Интерфейсы ввода
@@ -92,30 +124,6 @@ POST /test/detect — тестовый endpoint для детекции по о�
 #### Основная задача MVP
 
 Показать сквозной сценарий: от входного изображения до JSON-ответа сервиса и визуализации детекций.
-
----
-
-### 2. Структура репозитория  ОБНОВИТЬ
-
-```text
-project_root/
-├── main.py              # Главный цикл
-├── api/
-│   └── rest_api.py      # FastAPI приложение с endpoint /api/v1/test/detect
-├── jupyter.ipynb        # Демонстрационный Jupyter Notebook
-├── models/
-│   └── epoch51.pt       # Файл модели YOLO
-├── test_images/         # Тестовые изображения дорог
-├── requirements.txt     # Зависимости Python
-├── README.md            # Документация проекта
-└── Changelog.md         # История версий
-```
-
-**Ключевые компоненты:**
-
-- `rest_api.py` — FastAPI-приложение, загрузка модели YOLOv8 и обработка запросов.
-- `jupyter.ipynb` / `jupyter.py` — отправка изображений на API, визуализация боксов и вывод статистики по детекциям.
-- `models` — папка с весами обученной модели для детекции дефектов дорожного полотна.
 
 ---
 

@@ -10,20 +10,50 @@ from typing import Optional
 
 import cv2
 import numpy as np
+import yaml
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 
-from inference.yolo_detector import YoloDetector
+from inference.yolo_detector import YoloDetector, DEFAULT_MODEL_PATH
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def load_config() -> dict:
+    """Загружает config.yaml рядом с корневым main-пакетом (если есть)."""
+    # при необходимости скорректируй путь под свою структуру
+    config_path = Path(__file__).resolve().parent.parent / "config.yaml"
+    if not config_path.exists():
+        return {}
+    with config_path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def get_nested(d: dict, *keys, default=None):
+    """Безопасно читает вложенное значение из словаря."""
+    cur = d
+    for key in keys:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(key)
+        if cur is None:
+            return default
+    return cur
+
+
 # Создание FastAPI приложения
 app = FastAPI(title="Road Damage Detection API")
 
-detector = YoloDetector()
+# Загружаем конфигурацию и инициализируем детектор с путём модели из конфига
+_cfg = load_config()
+_model_path = get_nested(_cfg, "model", "path", default=DEFAULT_MODEL_PATH)
+logger.info("REST API: используем модель %s", _model_path)
+
+detector = YoloDetector(model_path=_model_path)
 
 class Base64ImageRequest(BaseModel):
     """Запрос с base64 изображением"""
