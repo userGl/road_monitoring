@@ -10,7 +10,6 @@ from pathlib import Path
 import uvicorn
 import yaml
 
-from api.rest_api import app
 from sensors.ffmpeg_camera import FFmpegRTSPCamera
 from sensors.rtsp_streamer import create_rtsp_streamer
 
@@ -18,6 +17,8 @@ from pipeline.core import VideoPipeline
 from pipeline.stages import ResizeStage, YoloDetectionStage, DrawDetectionsStage
 from inference.yolo_detector import YoloDetector, DEFAULT_MODEL_PATH
 
+from core.runtime_config import init_runtime_config
+from core import runtime_state
 
 def load_config():
     """Загружает конфигурацию из config.yaml.
@@ -48,6 +49,7 @@ def get_nested(d: dict, *keys, default=None):
 
 def run_api():
     """Запускает REST API через uvicorn."""
+    from api.rest_api import app
     uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
 
 
@@ -78,7 +80,22 @@ def main():
     preview_width = int(get_nested(cfg, "preview", "width", default=640))
     preview_height = int(get_nested(cfg, "preview", "height", default=640))
 
-    model_path = get_nested(cfg, "model", "path", default=DEFAULT_MODEL_PATH)
+    model_path = get_nested(cfg, "detector", "model_path", default=DEFAULT_MODEL_PATH)
+    
+    detector_conf = float(get_nested(cfg, "detector", "confidence_threshold", default=0.05))
+    
+    # Инициализируем runtime-config с нужными полями
+    init_runtime_config(
+        {
+            "stream": {
+                "enable_output_stream": enable_output_stream,
+            },
+            "detector": {
+                "confidence_threshold": detector_conf,
+                "model_path": model_path,
+            },
+        }
+    )
 
     # REST API работает параллельно с основным видеопотоком.
     api_thread = threading.Thread(target=run_api, daemon=True)
@@ -91,15 +108,18 @@ def main():
     meta_printed = False
     streamer = None
     detector = YoloDetector(model_path=model_path)
-
+    yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
     # Пайплайн: ресайз -> детекция -> отрисовка результатов.
     pipeline = VideoPipeline(
         stages=[
             ResizeStage(width=preview_width, height=preview_height),
-            YoloDetectionStage(detector=detector, conf=0.05),
+            yolo_stage,
             DrawDetectionsStage(),
         ]
     )
+
+    runtime_state.enable_output_stream = enable_output_stream
+    runtime_state.yolo_stage = yolo_stage
 
     try:
         for packet in camera.frames():
@@ -111,7 +131,7 @@ def main():
 
             # Лениво поднимаем выходной RTSP-стример только после того,
             # как стали известны параметры входного потока.
-            if enable_output_stream and streamer is None:
+            if runtime_state.enable_output_stream and streamer is None:
                 fps = int(camera.meta.fps) if camera.meta is not None and camera.meta.fps else 25
                 streamer = create_rtsp_streamer(
                     output_rtsp_url,
@@ -123,6 +143,12 @@ def main():
                     f"[main] RTSP output started: {output_rtsp_url} "
                     f"({preview_width}x{preview_height} @ {fps} fps)"
                 )
+
+            if not runtime_state.enable_output_stream and streamer is not None:
+                streamer.stop()
+                streamer = None
+                print("[main] RTSP output stopped")
+
 
             # Прогоняем кадр через все стадии пайплайна.
             packet = pipeline.process(packet)

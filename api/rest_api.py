@@ -1,7 +1,11 @@
 # api/rest_api.py
 """
-Минимальный REST API endpoint для тестирования детекции
-POST /api/v1/test/detect — тест детекции (POST base64 image)
+REST API приложения.
+
+Поддерживает:
+- GET /api/v1/config
+- PATCH /api/v1/config
+- POST /api/v1/test/detect
 """
 import base64
 import logging
@@ -10,55 +14,51 @@ from typing import Optional
 
 import cv2
 import numpy as np
-import yaml
-from pathlib import Path
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-
-from inference.yolo_detector import YoloDetector, DEFAULT_MODEL_PATH
+from core.runtime_config import get_runtime_config, patch_runtime_config
+from core import runtime_state
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-def load_config() -> dict:
-    """Загружает config.yaml рядом с корневым main-пакетом (если есть)."""
-    # при необходимости скорректируй путь под свою структуру
-    config_path = Path(__file__).resolve().parent.parent / "config.yaml"
-    if not config_path.exists():
-        return {}
-    with config_path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-def get_nested(d: dict, *keys, default=None):
-    """Безопасно читает вложенное значение из словаря."""
-    cur = d
-    for key in keys:
-        if not isinstance(cur, dict):
-            return default
-        cur = cur.get(key)
-        if cur is None:
-            return default
-    return cur
-
 
 # Создание FastAPI приложения
 app = FastAPI(title="Road Damage Detection API")
 
-# Загружаем конфигурацию и инициализируем детектор с путём модели из конфига
-_cfg = load_config()
-_model_path = get_nested(_cfg, "model", "path", default=DEFAULT_MODEL_PATH)
-logger.info("REST API: используем модель %s", _model_path)
+# Pydantic-модели для конфигурации
+class StreamConfigResponse(BaseModel):
+    enable_output_stream: bool
 
-detector = YoloDetector(model_path=_model_path)
+class DetectorConfigResponse(BaseModel):
+    confidence_threshold: float
+    model_path: str
+
+class AppConfigResponse(BaseModel):
+    stream: StreamConfigResponse
+    detector: DetectorConfigResponse
+
+class StreamConfigPatch(BaseModel):
+    enable_output_stream: Optional[bool] = None
+
+class DetectorConfigPatch(BaseModel):
+    confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    model_path: Optional[str] = None
+
+class AppConfigPatch(BaseModel):
+    stream: Optional[StreamConfigPatch] = None
+    detector: Optional[DetectorConfigPatch] = None
+
+class ConfigPatchResponse(BaseModel):
+    success: bool
+    config: AppConfigResponse
+    applied: dict[str, str]
+
 
 class Base64ImageRequest(BaseModel):
     """Запрос с base64 изображением"""
     image: str  # base64 encoded image
-    confidence_threshold: Optional[float] = 0.3
+    confidence_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
 
 
 class DetectionResult(BaseModel):
@@ -66,8 +66,8 @@ class DetectionResult(BaseModel):
     class_id: int
     class_name: str
     confidence: float
-    bbox: list[float]  # [x_min, y_min, x_max, y_max]
- 
+    bbox: list[float]  # [x_min, y_min, x_max, y_max] 
+
 
 class DetectionResponse(BaseModel):
     """Ответ на запрос детекции"""
@@ -96,52 +96,97 @@ def decode_base64_image(base64_string: str) -> np.ndarray:
         
         return image
     except Exception as e:
-        logger.error(f"Ошибка декодирования: {e}")
+        logger.exception("Ошибка декодирования изображения")
         raise HTTPException(status_code=400, detail=f"Ошибка декодирования изображения: {str(e)}")
 
+
+# Endpoint для получения текущей конфигурации
+@app.get("/api/v1/config", response_model=AppConfigResponse)
+async def get_config():
+    """Возвращает текущую активную конфигурацию."""
+    cfg = get_runtime_config()
+    return AppConfigResponse(**cfg)
+
+# Endpoint для частичного обновления конфигурации
+@app.patch("/api/v1/config", response_model=ConfigPatchResponse)
+async def patch_config(body: AppConfigPatch):
+    """Частично обновляет конфигурацию приложения."""
+    patch = body.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(status_code=400, detail="Пустой PATCH-запрос")
+
+    applied: dict[str, str] = {}
+
+    # 1. Сохраняем изменения в runtime-config
+    cfg = patch_runtime_config(patch)
+
+    # 2. Применяем изменения к runtime-state и живым объектам
+    if body.stream and body.stream.enable_output_stream is not None:
+        runtime_state.enable_output_stream = body.stream.enable_output_stream
+        applied["stream.enable_output_stream"] = "updated"
+
+    if body.detector and body.detector.confidence_threshold is not None:
+        if runtime_state.yolo_stage is None:
+            applied["detector.confidence_threshold"] = "stage_not_ready"
+        else:
+            runtime_state.yolo_stage.conf = body.detector.confidence_threshold
+            applied["detector.confidence_threshold"] = "updated"
+
+    if body.detector and body.detector.model_path is not None:
+        applied["detector.model_path"] = "restart_required"
+
+    return ConfigPatchResponse(
+        success=True,
+        config=AppConfigResponse(**cfg),
+        applied=applied,
+    )
+
+# Endpoint для тестирования детекции
 @app.post("/api/v1/test/detect", response_model=DetectionResponse)
 async def test_detect(request: Base64ImageRequest):
     """
-    Тест детекции дефектов дорожного полотна
-    Принимает base64 закодированное изображение
+    Тест детекции дефектов дорожного полотна.
+    Принимает base64-кодированное изображение.
     """
     start_time = datetime.now()
-    
+
     try:
-        # Декодирование изображения
         image = decode_base64_image(request.image)
         image_shape = list(image.shape)
-        
+
+        stage = runtime_state.yolo_stage
+        if stage is None:
+            raise HTTPException(
+                status_code=503,
+                detail="YoloDetectionStage недоступен.",
+            )
+
+        detector = stage.detector
         if not detector.is_ready():
             raise HTTPException(
                 status_code=503,
-                detail="Модель не загружена. Проверьте MODEL_PATH на сервере.",
+                detail="Модель не загружена.",
             )
-        # Выполнение детекции с помощью YOLOv8
+
         detections = detector.detect(
             image,
-            confidence_threshold=request.confidence_threshold or 0.3,
+            confidence_threshold=request.confidence_threshold,
         )
 
-        # Время обработки
         processing_time = (datetime.now() - start_time).total_seconds() * 1000
-        
-        # Формирование ответа
-        detection_results = [
-            DetectionResult(**det) for det in detections
-        ]
-        
+        detection_results = [DetectionResult(**det) for det in detections]
+
         return DetectionResponse(
             success=True,
             timestamp=datetime.now().isoformat(),
             image_shape=image_shape,
             detections=detection_results,
             processing_time_ms=round(processing_time, 2),
-            message=f"Обнаружено дефектов: {len(detection_results)}"
+            message=f"Обнаружено дефектов: {len(detection_results)}",
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Ошибка при детекции: {e}", exc_info=True)
+        logger.exception("Ошибка при детекции")
         raise HTTPException(status_code=500, detail=f"Ошибка обработки: {str(e)}")

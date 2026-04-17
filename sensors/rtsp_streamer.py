@@ -51,6 +51,7 @@ class RTSPStreamer:
         self.lock = threading.RLock()
         self.running = False
         self.restart_count = 0
+        self.disabled = False
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def _build_ffmpeg_cmd(self) -> list[str]:
@@ -128,9 +129,14 @@ class RTSPStreamer:
     def start(self) -> None:
         """Запускает ffmpeg-публикатор, если он ещё не запущен."""
         with self.lock:
+            if self.disabled:
+                self.logger.warning("RTSP streamer is disabled; start() skipped")
+                return
+
             if self.process is not None and self.process.poll() is None:
                 self.running = True
                 return
+
             self._spawn_locked()
             self.restart_count = 0
 
@@ -141,7 +147,13 @@ class RTSPStreamer:
         новый ffmpeg. Вызывается только под lock.
         """
         if self.restart_count >= self.cfg.max_restarts:
-            raise RuntimeError(f"RTSP streamer exceeded max restarts: {self.cfg.max_restarts}")
+            self.logger.error(
+                "RTSP streamer exceeded max restarts: %s. Disabling streamer.",
+                self.cfg.max_restarts,
+            )
+            self.disabled = True
+            self._stop_locked(wait=False)
+            return
 
         self.logger.warning("Restarting RTSP streamer...")
         self.restart_count += 1
@@ -181,6 +193,9 @@ class RTSPStreamer:
         Если стример ещё не стартовал — запускает его.
         Если процесс умер или pipe недоступен — делает рестарт.
         """
+        if self.disabled:
+            return
+
         if not self.running:
             self.start()
         elif self.process is None or self.process.poll() is not None or self.process.stdin is None:
@@ -190,12 +205,19 @@ class RTSPStreamer:
         """Отправляет один кадр в ffmpeg stdin.
 
         При ошибке записи пытается один раз перезапустить ffmpeg и
-        повторить отправку того же кадра.
+        повторить отправку того же кадра. Если лимит рестартов исчерпан,
+        стример отключается без падения основного приложения.
         """
+        if self.disabled:
+            return
+
         payload = self._ensure_frame(frame).tobytes()
 
         with self.lock:
             self._require_process_locked()
+
+            if self.disabled:
+                return
 
             try:
                 assert self.process is not None and self.process.stdin is not None
@@ -204,15 +226,22 @@ class RTSPStreamer:
                 self.logger.exception("FFmpeg pipe error: %s", e)
                 self._restart_locked()
 
+                if self.disabled:
+                    return
+
                 if self.process is None or self.process.stdin is None:
-                    raise RuntimeError("Failed to restart RTSP streamer")
+                    return
 
                 self.process.stdin.write(payload)
 
-            if self.process.poll() is not None:
-                raise RuntimeError(
-                    f"FFmpeg exited unexpectedly with code {self.process.returncode}"
+            if self.process is not None and self.process.poll() is not None:
+                self.logger.error(
+                    "FFmpeg exited unexpectedly with code %s. Disabling streamer.",
+                    self.process.returncode,
                 )
+                self.disabled = True
+                self._stop_locked(wait=False)
+                return     
 
     def _stop_locked(self, wait: bool = True) -> None:
         """Останавливает текущий ffmpeg-процесс и освобождает ресурсы.
@@ -263,6 +292,11 @@ class RTSPStreamer:
         with self.lock:
             return self.process is not None and self.process.poll() is None
 
+    def is_disabled(self) -> bool:
+        """Возвращает True, если стример отключён после ошибок."""
+        with self.lock:
+            return self.disabled
+
     def __enter__(self):
         """Поддержка with: при входе запустить стример."""
         self.start()
@@ -271,7 +305,6 @@ class RTSPStreamer:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Поддержка with: при выходе остановить стример."""
         self.stop()
-
 
 def create_rtsp_streamer(
     url: str,
