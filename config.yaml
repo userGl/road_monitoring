@@ -11,7 +11,7 @@ vlc:
 stream:
   input_rtsp_url: "rtsp://127.0.0.1:8554/live"
   output_rtsp_url: "rtsp://127.0.0.1:8554/preview"
-  enable_output_stream: true
+  enable_output_stream: false
 
 camera:
   use_hwaccel: true
@@ -20,5 +20,6 @@ preview:
   width: 640
   height: 640
 
-model:
-  path: models/epoch50.pt
+detector:
+  model_path: models/epoch50.pt
+  confidence_threshold: 0.05

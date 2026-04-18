@@ -117,24 +117,28 @@ async def patch_config(body: AppConfigPatch):
 
     applied: dict[str, str] = {}
 
-    # 1. Сохраняем изменения в runtime-config
+    # 1. Сначала обновляем runtime-config как источник истины для API и UI.
+    # Применение изменений к живым объектам выполняется в main-loop.
     cfg = patch_runtime_config(patch)
 
-    # 2. Применяем изменения к runtime-state и живым объектам
+    # 2. Обновляем целевое runtime-состояние.
+    # Main-loop увидит изменение и сам поднимет/остановит RTSP output.
     if body.stream and body.stream.enable_output_stream is not None:
         runtime_state.enable_output_stream = body.stream.enable_output_stream
         applied["stream.enable_output_stream"] = "updated"
 
+    # 3. Обновляем целевое значение confidence.
+    # Main-loop применит его к YoloDetectionStage без рестарта процесса.
     if body.detector and body.detector.confidence_threshold is not None:
-        if runtime_state.yolo_stage is None:
-            applied["detector.confidence_threshold"] = "stage_not_ready"
-        else:
-            runtime_state.yolo_stage.conf = body.detector.confidence_threshold
-            applied["detector.confidence_threshold"] = "updated"
+        runtime_state.confidence_threshold = body.detector.confidence_threshold
+        applied["detector.confidence_threshold"] = "updated"
 
+    # 4. Обновляем целевое значение model_path.
+    # Main-loop применит его к YoloDetector через создание нового объекта.
     if body.detector and body.detector.model_path is not None:
-        applied["detector.model_path"] = "restart_required"
-
+        runtime_state.model_path = body.detector.model_path
+        applied["detector.model_path"] = "updated"
+    
     return ConfigPatchResponse(
         success=True,
         config=AppConfigResponse(**cfg),
