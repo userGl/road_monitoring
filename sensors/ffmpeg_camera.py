@@ -6,9 +6,10 @@ import threading
 import time
 import numpy as np
 from subprocess import CalledProcessError
-from typing import Optional, Generator
+from typing import Optional, Generator, Callable
 
 from core.frame_packet import VideoMeta, FramePacket
+
 
 class FFmpegRTSPCamera:
     """Захват RTSP-потока через ffmpeg с авто-реконнектом.
@@ -31,10 +32,10 @@ class FFmpegRTSPCamera:
     ) -> None:
         """Инициализация камеры.
 
-        rtsp_url        – URL RTSP-потока.
+        rtsp_url – URL RTSP-потока.
         reconnect_delay – пауза между попытками переподключения.
-        max_bad_reads   – сколько подряд неудачных чтений ждем до рестарта ffmpeg.
-        use_hwaccel     – использовать ли CUDA-ускорение декодирования.
+        max_bad_reads – сколько подряд неудачных чтений ждем до рестарта ffmpeg.
+        use_hwaccel – использовать ли CUDA-ускорение декодирования.
         """
         self.rtsp_url = rtsp_url
         self.width = width
@@ -234,6 +235,7 @@ class FFmpegRTSPCamera:
                 ts_monotonic=time.monotonic(),
                 ts_wall=time.time(),
             )
+
             self._frame_id += 1
             return packet
 
@@ -257,32 +259,52 @@ class FFmpegRTSPCamera:
 
         return None
 
-    def frames(self) -> Generator[FramePacket, None, None]:
+    def frames(
+        self,
+        should_stop: Optional[Callable[[], bool]] = None,
+    ) -> Generator[FramePacket, None, None]:
         """Генератор непрерывной последовательности кадров с авто-реконнектом.
 
         Бесконечно:
         - следит за состоянием ffmpeg-процесса;
         - при падении/отсутствии потока пытается переподключиться с паузой;
         - читает кадры через read() и отдаёт только валидные FramePacket.
-
         При превышении max_bad_reads подряд перезапускает ffmpeg.
         Гарантированно вызывает release() при выходе из генератора.
         """
         try:
             while True:
+                if should_stop is not None and should_stop():
+                    print('[camera] stop requested, exiting frames loop', file=sys.stderr)
+                    return
+
                 if self.proc is None or self.proc.poll() is not None:
                     print('[camera] stream lost, reconnecting...', file=sys.stderr)
+
+                    if should_stop is not None and should_stop():
+                        print('[camera] stop requested before reconnect', file=sys.stderr)
+                        return
+
                     time.sleep(self.reconnect_delay)
+
+                    if should_stop is not None and should_stop():
+                        print('[camera] stop requested after reconnect delay', file=sys.stderr)
+                        return
+
                     try:
                         self.open()
                     except Exception as e:
                         print(f'[camera] reconnect failed: {e}', file=sys.stderr)
+
+                        if should_stop is not None and should_stop():
+                            print('[camera] stop requested after reconnect failure', file=sys.stderr)
+                            return
+
                         time.sleep(self.reconnect_delay)
                         continue
 
                     # важно: open() могла не поднять ffmpeg, если потока нет
                     if self.proc is None:
-                        # ждём следующей попытки
                         continue
 
                 frame = self.read()
@@ -294,6 +316,11 @@ class FFmpegRTSPCamera:
                         )
                         self.release()
                         self._bad_reads = 0
+
+                        if should_stop is not None and should_stop():
+                            print('[camera] stop requested after bad reads', file=sys.stderr)
+                            return
+
                         time.sleep(self.reconnect_delay)
                     continue
 

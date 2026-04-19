@@ -5,53 +5,28 @@
 """
 
 import threading
+import time
 
 import uvicorn
 
-from sensors.ffmpeg_camera import FFmpegRTSPCamera
-from sensors.rtsp_streamer import create_rtsp_streamer
-
-from pipeline.core import VideoPipeline
-from pipeline.stages import ResizeStage, YoloDetectionStage, DrawDetectionsStage
-from inference.yolo_detector import YoloDetector, DEFAULT_MODEL_PATH
+from inference.yolo_detector import DEFAULT_MODEL_PATH
 
 from core.runtime_config import (
     init_runtime_config,
     load_config,
     get_nested,
-    sync_runtime_targets,
-    snapshot_applied_config,
-    apply_runtime_changes,
 )
 from core import runtime_state
+
+from services.rtsp_session import run_rtsp_session
+from services.images_batch import run_images_batch_session
 
 
 def run_api():
     """Запускает REST API через uvicorn."""
     from api.rest_api import app
+
     uvicorn.run(app, host="0.0.0.0", port=8081, log_level="info")
-
-
-def build_pipeline(
-    preview_width: int,
-    preview_height: int,
-    yolo_stage: YoloDetectionStage,
-    draw_enabled: bool,
-) -> VideoPipeline:
-    """Собирает пайплайн обработки кадров.
-
-    Базовый пайплайн: ресайз -> детекция.
-    При включённом output stream добавляется отрисовка результатов.
-    """
-    stages = [
-        ResizeStage(width=preview_width, height=preview_height),
-        yolo_stage,
-    ]
-
-    if draw_enabled:
-        stages.append(DrawDetectionsStage())
-
-    return VideoPipeline(stages=stages)
 
 
 def main():
@@ -69,9 +44,11 @@ def main():
     input_rtsp_url = get_nested(
         cfg, "stream", "input_rtsp_url", default="rtsp://127.0.0.1:8554/live"
     )
+
     output_rtsp_url = get_nested(
         cfg, "stream", "output_rtsp_url", default="rtsp://127.0.0.1:8554/preview"
     )
+
     enable_output_stream = get_nested(
         cfg, "stream", "enable_output_stream", default=True
     )
@@ -104,134 +81,80 @@ def main():
     api_thread = threading.Thread(target=run_api, daemon=True)
     api_thread.start()
 
-    # Камера читает входной RTSP-поток через ffmpeg.
-    camera = FFmpegRTSPCamera(input_rtsp_url, use_hwaccel=use_hwaccel)
-    print("[main] RTSP input started, API on :8081")
+    # Инициализируем режим работы по умолчанию.
+    # Возможные значения: "rtsp", "idle", "test_images".
+    if not hasattr(runtime_state, "mode"):
+        runtime_state.mode = "rtsp"
 
-    meta_printed = False
-    streamer = None
-    detector = YoloDetector(model_path=model_path)
-    yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
+    if not hasattr(runtime_state, "mode_lock"):
+        from threading import RLock
 
-    # На старте output stream может быть ещё не поднят,
-    # поэтому пайплайн собираем без DrawDetectionsStage.
-    draw_enabled = False
-    pipeline = build_pipeline(
-        preview_width=preview_width,
-        preview_height=preview_height,
-        yolo_stage=yolo_stage,
-        draw_enabled=draw_enabled,
-    )
-    last_draw_enabled = draw_enabled
+        runtime_state.mode_lock = RLock()
 
-    runtime_state.yolo_stage = yolo_stage
+    # Параметры для тестового режима будут задаваться через API.
+    if not hasattr(runtime_state, "test_input_dir"):
+        runtime_state.test_input_dir = None
+    if not hasattr(runtime_state, "test_output_dir"):
+        runtime_state.test_output_dir = None
+    if not hasattr(runtime_state, "test_fps"):
+        runtime_state.test_fps = None
 
-    # Сохраняем в runtime_state целевые значения конфигурации.
-    # REST API меняет именно эти поля, а main-loop применяет их к живым объектам.
-    sync_runtime_targets(
-        enable_output_stream=enable_output_stream,
-        confidence_threshold=detector_conf,
-        model_path=model_path,
-    )
+    print("[main] Main control loop started")
 
-    # Храним отдельный слепок уже ПРИМЕНЁННОЙ конфигурации.
-    # Он нужен, чтобы main-loop мог понять, что именно изменилось с прошлого кадра.
-    last_applied_cfg = snapshot_applied_config(
-        enable_output_stream=enable_output_stream,
-        confidence_threshold=detector_conf,
-        model_path=model_path,
-    )
+    # Управляющий цикл: в зависимости от режима запускает RTSP-сессию
+    # или однократную batch-сессию обработки изображений.
+    while True:
+        with runtime_state.mode_lock:
+            mode = getattr(runtime_state, "mode", "rtsp")
+            test_input_dir = getattr(runtime_state, "test_input_dir", None)
+            test_output_dir = getattr(runtime_state, "test_output_dir", None)
+            test_fps = getattr(runtime_state, "test_fps", None)
 
-    try:
-        for packet in camera.frames():
-            # Печатаем метаданные входного видеопотока один раз,
-            # когда ffprobe/ffmpeg уже успешно открыли поток.
-            if not meta_printed and camera.meta is not None:
-                print(f"[main] Video meta: {camera.meta}")
-                meta_printed = True
-
-            # На каждом кадре сначала применяем накопившиеся runtime-изменения,
-            # и только потом работаем со streamer и пайплайном.
-            last_applied_cfg = apply_runtime_changes(
-                last_applied_cfg=last_applied_cfg,
-                yolo_stage=yolo_stage,
+        if mode == "rtsp":
+            # Подключается к входному RTSP-потоку.
+            # Создаёт пайплайн обработки кадров.
+            # При включённом output stream публикует обработанные кадры в RTSP.
+            run_rtsp_session(
+                cfg=cfg,
+                input_rtsp_url=input_rtsp_url,
+                output_rtsp_url=output_rtsp_url,
+                use_hwaccel=use_hwaccel,
+                preview_width=preview_width,
+                preview_height=preview_height,
+                model_path=model_path,
+                detector_conf=detector_conf,
             )
+            continue
 
-            # Если RTSP streamer был аварийно отключён после серии рестартов,
-            # убираем его из main-loop. Пайплайн ниже будет пересобран без draw-stage.
-            if streamer is not None and streamer.is_disabled():
-                streamer.stop()
-                streamer = None
-                print("[main] RTSP streamer disabled after failures")
-
-            # Если output stream выключили через runtime-config,
-            # останавливаем стример.
-            if not runtime_state.enable_output_stream and streamer is not None:
-                streamer.stop()
-                streamer = None
-                print("[main] RTSP output stopped")
-
-            # Лениво поднимаем выходной RTSP-стример только после того,
-            # как стали известны параметры входного потока.
-            if (
-                runtime_state.enable_output_stream
-                and streamer is None
-                and camera.meta is not None
-            ):
-                fps = int(camera.meta.fps) if camera.meta.fps else 25
-                streamer = create_rtsp_streamer(
-                    output_rtsp_url,
-                    width=preview_width,
-                    height=preview_height,
-                    fps=fps,
-                )
+        if mode == "test_images":
+            if not test_input_dir or not test_output_dir:
                 print(
-                    f"[main] RTSP output started: {output_rtsp_url} "
-                    f"({preview_width}x{preview_height} @ {fps} fps)"
+                    "[main] test_images mode requested, "
+                    "but test_input_dir/test_output_dir not set"
                 )
+                with runtime_state.mode_lock:
+                    runtime_state.mode = "idle"
+                continue
 
-            # Отрисовка нужна только тогда, когда реально активен output stream.
-            draw_enabled = (
-                runtime_state.enable_output_stream
-                and streamer is not None
-                and not streamer.is_disabled()
+            run_images_batch_session(
+                input_dir=test_input_dir,
+                output_dir=test_output_dir,
+                fps=test_fps or 5,
+                cfg=cfg,
+                model_path=model_path,
+                detector_conf=detector_conf,
             )
 
-            # Если режим output stream изменился, пересобираем пайплайн:
-            # без draw-stage, когда стрим выключен, и с draw-stage, когда включён.
-            if draw_enabled != last_draw_enabled:
-                pipeline = build_pipeline(
-                    preview_width=preview_width,
-                    preview_height=preview_height,
-                    yolo_stage=yolo_stage,
-                    draw_enabled=draw_enabled,
-                )
-                last_draw_enabled = draw_enabled
-                print(f"[main] Pipeline rebuilt: draw_enabled={draw_enabled}")
+            # После batch-сессии переходим в режим ожидания команды.
+            with runtime_state.mode_lock:
+                runtime_state.mode = "idle"
 
-            # Прогоняем кадр через все стадии пайплайна.
-            packet = pipeline.process(packet)
+            continue
 
-            # Приоритет отправки:
-            # 1. annotated_frame — если кадр уже размечен;
-            # 2. resized_frame — если есть только ресайз;
-            # 3. frame — исходный кадр как fallback.
-            frame_to_send = (
-                packet.annotated_frame
-                if packet.annotated_frame is not None
-                else packet.resized_frame
-                if packet.resized_frame is not None
-                else packet.frame
-            )
-
-            if streamer is not None and not streamer.is_disabled():
-                streamer.write(frame_to_send)
-
-    finally:
-        # Корректно освобождаем ресурсы при завершении приложения.
-        if streamer is not None:
-            streamer.stop()
-        camera.release()
+        if mode == "idle":
+            # Если ничего не делать, ждём команды.
+            time.sleep(0.5)
+            continue
 
 
 if __name__ == "__main__":

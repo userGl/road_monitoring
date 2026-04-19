@@ -2,15 +2,17 @@
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 import urllib.error
 import urllib.request
 
-
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:8081/api/v1")
 CONFIG_URL = f"{BASE_URL}/config"
+CONTROL_URL = f"{BASE_URL}/control"
+TEST_IMAGES_URL = f"{BASE_URL}/test/images"
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 APP_DIR = SCRIPT_DIR.parent
@@ -19,6 +21,7 @@ START_RTSP_SCRIPT = SCRIPT_DIR / "start_mediamtx_rtsp.sh"
 VIEW_RTSP_SCRIPT = SCRIPT_DIR / "rtsp_view.sh"
 APP_ENTRY = APP_DIR / "main.py"
 MODELS_DIR = APP_DIR / "models"
+TEST_IMAGES_ROOT = APP_DIR / "test_images"
 
 
 def http_get(url: str) -> str:
@@ -39,6 +42,18 @@ def http_patch_json(url: str, payload: dict) -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def http_post_json(url: str, payload: dict) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=3.0) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 def load_config() -> Optional[dict]:
     try:
         raw = http_get(CONFIG_URL)
@@ -50,6 +65,17 @@ def load_config() -> Optional[dict]:
         return None
 
 
+def load_control_status() -> Optional[dict]:
+    try:
+        raw = http_get(CONTROL_URL)
+        return json.loads(raw)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as e:
+        print()
+        print(f"Не удалось получить текущий статус управления: {CONTROL_URL}")
+        print(f"Причина: {e}")
+        return None
+
+
 def print_config(cfg: dict) -> None:
     stream_enabled = cfg.get("stream", {}).get("enable_output_stream", "n/a")
     detector_conf = cfg.get("detector", {}).get("confidence_threshold", "n/a")
@@ -57,9 +83,28 @@ def print_config(cfg: dict) -> None:
 
     print()
     print("================ CURRENT CONFIG ================")
-    print(f"stream.enable_output_stream  : {stream_enabled}")
+    print(f"stream.enable_output_stream : {stream_enabled}")
     print(f"detector.confidence_threshold: {detector_conf}")
     print(f"detector.model_path          : {model_path}")
+    print("===============================================")
+    print()
+
+
+def print_control_status(status: Optional[dict]) -> None:
+    print()
+    print("================ CURRENT CONTROL ===============")
+    if status is None:
+        print("mode                : n/a")
+        print("test_input_dir      : n/a")
+        print("test_output_dir     : n/a")
+        print("test_fps            : n/a")
+        print("yolo_stage_ready    : n/a")
+    else:
+        print(f"mode                : {status.get('mode', 'n/a')}")
+        print(f"test_input_dir      : {status.get('test_input_dir', 'n/a')}")
+        print(f"test_output_dir     : {status.get('test_output_dir', 'n/a')}")
+        print(f"test_fps            : {status.get('test_fps', 'n/a')}")
+        print(f"yolo_stage_ready    : {status.get('yolo_stage_ready', 'n/a')}")
     print("===============================================")
     print()
 
@@ -289,6 +334,138 @@ def start_main_app() -> None:
     open_in_new_terminal("Main App", cmd)
 
 
+def post_control_mode(mode: str) -> None:
+    payload = {"mode": mode}
+    print("\nОтправка POST /control...")
+    try:
+        resp = http_post_json(CONTROL_URL, payload)
+    except Exception as e:
+        print(f"Ошибка POST-запроса: {e}")
+        return
+
+    print("Ответ API:")
+    pretty_print_json(resp)
+    print()
+
+
+def list_test_image_dirs() -> list[Path]:
+    if not TEST_IMAGES_ROOT.is_dir():
+        return []
+
+    dirs = [
+        path for path in TEST_IMAGES_ROOT.iterdir()
+        if path.is_dir() and path.name.lower() != "output"
+    ]
+    return sorted(dirs, key=lambda p: p.name.lower())
+
+
+def run_batch_images(cfg: dict) -> None:
+    test_dirs = list_test_image_dirs()
+
+    if not TEST_IMAGES_ROOT.is_dir():
+        print(f"Папка test_images не найдена: {TEST_IMAGES_ROOT}")
+        return
+
+    if not test_dirs:
+        print(f"В папке {TEST_IMAGES_ROOT} не найдено подпапок с изображениями.")
+        return
+
+    detector_conf = cfg.get("detector", {}).get("confidence_threshold", "n/a")
+    model_path = cfg.get("detector", {}).get("model_path", "n/a")
+
+    print()
+    print("Доступные папки в test_images:")
+    for idx, folder in enumerate(test_dirs, start=1):
+        print(f"{idx}) {folder.name}")
+    print("0) Назад")
+    print()
+    print("Текущие параметры детекции:")
+    print(f"- detector.confidence_threshold: {detector_conf}")
+    print(f"- detector.model_path          : {model_path}")
+    print()
+
+    choice = input("Выберите папку для batch-обработки: ").strip()
+
+    if choice == "0":
+        return
+
+    if not choice.isdigit():
+        print("Некорректный выбор")
+        return
+
+    index = int(choice)
+    if not (1 <= index <= len(test_dirs)):
+        print("Некорректный выбор")
+        return
+
+    selected_dir = test_dirs[index - 1]
+
+    fps_raw = input("Введите fps для batch [по умолчанию 5]: ").strip()
+    if fps_raw == "":
+        fps = 5
+    else:
+        try:
+            fps = int(fps_raw)
+        except ValueError:
+            print("Ошибка: fps должен быть целым числом.")
+            return
+        if fps <= 0:
+            print("Ошибка: fps должен быть больше 0.")
+            return
+
+    timestamp = datetime.now().strftime("output_%Y-%m-%d_%H-%M-%S")
+    output_dir = selected_dir / timestamp
+
+    payload = {
+        "input_dir": str(selected_dir),
+        "output_dir": str(output_dir),
+        "fps": fps,
+    }
+
+    print("\nОтправка POST /test/images...")
+    try:
+        resp = http_post_json(TEST_IMAGES_URL, payload)
+    except Exception as e:
+        print(f"Ошибка POST-запроса: {e}")
+        return
+
+    print("Ответ API:")
+    pretty_print_json(resp)
+    print()
+    print(f"Результаты будут сохранены в: {output_dir}")
+    print()
+
+
+def control_menu(cfg: dict) -> None:
+    while True:
+        status = load_control_status()
+        print_control_status(status)
+
+        print("=============== УПРАВЛЕНИЕ ===============")
+        print("1) Включить idle")
+        print("2) Включить rtsp")
+        print("3) Batch image")
+        print("0) Назад")
+        print("==========================================")
+        print()
+
+        action = input("Выбор: ").strip()
+
+        if action == "1":
+            post_control_mode("idle")
+            pause()
+        elif action == "2":
+            post_control_mode("rtsp")
+            pause()
+        elif action == "3":
+            run_batch_images(cfg)
+            pause()
+        elif action == "0":
+            break
+        else:
+            print("Некорректный выбор")
+
+
 def launch_menu() -> None:
     while True:
         print()
@@ -333,9 +510,10 @@ def main_loop() -> None:
         print_config(cfg)
         print("Что сделать?")
         print("1) Управление запуском")
-        print("2) Изменить detector.confidence_threshold")
-        print("3) Изменить detector.model_path")
-        print("4) Показать полный JSON")
+        print("2) Управление")
+        print("3) Изменить detector.confidence_threshold")
+        print("4) Изменить detector.model_path")
+        print("5) Показать полный JSON")
         print("0) Выход")
         print()
 
@@ -344,10 +522,12 @@ def main_loop() -> None:
         if action == "1":
             launch_menu()
         elif action == "2":
-            change_confidence(cfg)
+            control_menu(cfg)
         elif action == "3":
-            change_model_path(cfg)
+            change_confidence(cfg)
         elif action == "4":
+            change_model_path(cfg)
+        elif action == "5":
             pretty_print_json(cfg)
             pause()
         elif action == "0":

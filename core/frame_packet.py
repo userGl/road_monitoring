@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 import numpy as np
 
 
@@ -29,7 +29,9 @@ class FramePacket:
         ts_wall: Системное время получения кадра.
         resized_frame: Кадр после ресайза, если он выполнялся в пайплайне.
         detections: Список результатов детекции для кадра.
+        tracks: Список треков / ассоциаций на текущем кадре.
         annotated_frame: Кадр с нанесёнными боксами, подписями и другой разметкой.
+        meta: Произвольная служебная информация (например, путь до входного файла в images-режиме).
     """
 
     frame_id: int
@@ -38,5 +40,15 @@ class FramePacket:
     ts_wall: float
 
     resized_frame: Optional[np.ndarray] = None
-    detections: list[Dict[str, Any]] = field(default_factory=list)
+
+    # Детекции: можно оставить как list[dict], но договориться о ключах:
+    # bbox, score, class_id, class_name, track_id, is_new, is_lost
+    detections: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Треки на текущем кадре (агрегированная информация от трекера)
+    tracks: List[Dict[str, Any]] = field(default_factory=list)
+
     annotated_frame: Optional[np.ndarray] = None
+
+    # Доп. служебные поля (input_path и т.п.)
+    meta: Dict[str, Any] = field(default_factory=dict)
