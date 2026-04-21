@@ -124,14 +124,26 @@ Start-Sleep -Seconds 2
 Write-Host "Publishing file: $videoPath"
 Write-Host "RTSP URL: $rtspUrl"
 
-# --- Запуск ffmpeg для публикации RTSP ---
+# --- Запуск ffmpeg для публикации RTSP со звуком ---
 
+# ffmpeg `
+#     -loglevel info `
+#     -re `
+#     -stream_loop -1 `
+#     -i "$videoPath" `
+#     -rtsp_transport tcp `
+#     -c copy `
+#     -f rtsp `
+#     "$rtspUrl"
+
+# --- Запуск ffmpeg для публикации RTSP без звука ---
 ffmpeg `
     -loglevel info `
     -re `
     -stream_loop -1 `
     -i "$videoPath" `
+    -an `
+    -c:v copy `
     -rtsp_transport tcp `
-    -c copy `
     -f rtsp `
     "$rtspUrl"

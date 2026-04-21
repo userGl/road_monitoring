@@ -58,5 +58,13 @@ sleep 2
 echo "Publishing file: $video_path"
 echo "RTSP URL: rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
 
+# --- Запуск ffmpeg для публикации RTSP со звуком ---
+# ffmpeg -re -stream_loop -1 -i "$video_path" \
+#   -c copy -f rtsp "rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
+
+# --- Запуск ffmpeg для публикации RTSP без звука ---
 ffmpeg -re -stream_loop -1 -i "$video_path" \
-  -c copy -f rtsp "rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
+  -an \
+  -c:v copy \
+  -rtsp_transport tcp -f rtsp \
+  "rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
