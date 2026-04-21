@@ -11,7 +11,6 @@ from core import runtime_state
 from inference.yolo_detector import YoloDetector
 from pipeline.stages import YoloDetectionStage
 
-
 _lock = RLock()
 
 _runtime_config: dict[str, Any] = {
@@ -153,6 +152,103 @@ def apply_runtime_changes(
 
     applied["stream"]["enable_output_stream"] = target_enable_output_stream
     return applied
+
+
+def init_app_config_from_file(config_path: str | Path | None = None) -> None:
+    """
+    Загружает YAML и инициализирует runtime-config начальными значениями.
+    Вызывается один раз при старте приложения.
+    """
+    cfg_file = load_config(config_path)
+
+    from inference.yolo_detector import DEFAULT_MODEL_PATH
+
+    input_rtsp_url = get_nested(
+        cfg_file, "stream", "input_rtsp_url", default="rtsp://127.0.0.1:8554/live"
+    )
+    output_rtsp_url = get_nested(
+        cfg_file, "stream", "output_rtsp_url", default="rtsp://127.0.0.1:8554/preview"
+    )
+    enable_output_stream = get_nested(
+        cfg_file, "stream", "enable_output_stream", default=True
+    )
+
+    use_hwaccel = get_nested(cfg_file, "camera", "use_hwaccel", default=False)
+
+    preview_width = int(get_nested(cfg_file, "preview", "width", default=640))
+    preview_height = int(get_nested(cfg_file, "preview", "height", default=640))
+
+    model_path = get_nested(
+        cfg_file, "detector", "model_path", default=DEFAULT_MODEL_PATH
+    )
+    detector_conf = float(
+        get_nested(cfg_file, "detector", "confidence_threshold", default=0.05)
+    )
+
+    init_runtime_config(
+        {
+            "stream": {
+                "enable_output_stream": enable_output_stream,
+                "input_rtsp_url": input_rtsp_url,
+                "output_rtsp_url": output_rtsp_url,
+            },
+            "camera": {
+                "use_hwaccel": use_hwaccel,
+            },
+            "preview": {
+                "width": preview_width,
+                "height": preview_height,
+            },
+            "detector": {
+                "confidence_threshold": detector_conf,
+                "model_path": model_path,
+            },
+        }
+    )
+
+
+def get_current_app_settings() -> dict[str, Any]:
+    """
+    Возвращает актуальные параметры для main-loop (RTSP и batch),
+    развёрнутые из runtime-config.
+    """
+    cfg = get_runtime_config()
+
+    from inference.yolo_detector import DEFAULT_MODEL_PATH
+
+    input_rtsp_url = get_nested(
+        cfg, "stream", "input_rtsp_url", default="rtsp://127.0.0.1:8554/live"
+    )
+    output_rtsp_url = get_nested(
+        cfg, "stream", "output_rtsp_url", default="rtsp://127.0.0.1:8554/preview"
+    )
+    enable_output_stream = get_nested(
+        cfg, "stream", "enable_output_stream", default=True
+    )
+
+    use_hwaccel = get_nested(cfg, "camera", "use_hwaccel", default=False)
+
+    preview_width = int(get_nested(cfg, "preview", "width", default=640))
+    preview_height = int(get_nested(cfg, "preview", "height", default=640))
+
+    model_path = get_nested(
+        cfg, "detector", "model_path", default=DEFAULT_MODEL_PATH
+    )
+    detector_conf = float(
+        get_nested(cfg, "detector", "confidence_threshold", default=0.05)
+    )
+
+    return {
+        "cfg": cfg,
+        "input_rtsp_url": input_rtsp_url,
+        "output_rtsp_url": output_rtsp_url,
+        "enable_output_stream": enable_output_stream,
+        "use_hwaccel": use_hwaccel,
+        "preview_width": preview_width,
+        "preview_height": preview_height,
+        "model_path": model_path,
+        "detector_conf": detector_conf,
+    }
 
 
 def _merge_dict(dst: dict[str, Any], src: dict[str, Any]) -> None:

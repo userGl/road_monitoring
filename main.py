@@ -9,12 +9,9 @@ import time
 
 import uvicorn
 
-from inference.yolo_detector import DEFAULT_MODEL_PATH
-
 from core.runtime_config import (
-    init_runtime_config,
-    load_config,
-    get_nested,
+    init_app_config_from_file,
+    get_current_app_settings,
 )
 from core import runtime_state
 
@@ -39,43 +36,8 @@ def main():
     4. Создаёт пайплайн обработки кадров.
     5. При включённом output stream публикует обработанные кадры в RTSP.
     """
-    cfg = load_config()
-
-    input_rtsp_url = get_nested(
-        cfg, "stream", "input_rtsp_url", default="rtsp://127.0.0.1:8554/live"
-    )
-
-    output_rtsp_url = get_nested(
-        cfg, "stream", "output_rtsp_url", default="rtsp://127.0.0.1:8554/preview"
-    )
-
-    enable_output_stream = get_nested(
-        cfg, "stream", "enable_output_stream", default=True
-    )
-
-    use_hwaccel = get_nested(cfg, "camera", "use_hwaccel", default=False)
-
-    preview_width = int(get_nested(cfg, "preview", "width", default=640))
-    preview_height = int(get_nested(cfg, "preview", "height", default=640))
-
-    model_path = get_nested(cfg, "detector", "model_path", default=DEFAULT_MODEL_PATH)
-
-    detector_conf = float(
-        get_nested(cfg, "detector", "confidence_threshold", default=0.05)
-    )
-
-    # Инициализируем runtime-config с нужными полями
-    init_runtime_config(
-        {
-            "stream": {
-                "enable_output_stream": enable_output_stream,
-            },
-            "detector": {
-                "confidence_threshold": detector_conf,
-                "model_path": model_path,
-            },
-        }
-    )
+    # 1. Инициализируем runtime-config из YAML один раз при старте процесса.
+    init_app_config_from_file()
 
     # REST API работает параллельно с основным видеопотоком.
     api_thread = threading.Thread(target=run_api, daemon=True)
@@ -114,15 +76,17 @@ def main():
             # Подключается к входному RTSP-потоку.
             # Создаёт пайплайн обработки кадров.
             # При включённом output stream публикует обработанные кадры в RTSP.
+            settings = get_current_app_settings()
+
             run_rtsp_session(
-                cfg=cfg,
-                input_rtsp_url=input_rtsp_url,
-                output_rtsp_url=output_rtsp_url,
-                use_hwaccel=use_hwaccel,
-                preview_width=preview_width,
-                preview_height=preview_height,
-                model_path=model_path,
-                detector_conf=detector_conf,
+                cfg=settings["cfg"],
+                input_rtsp_url=settings["input_rtsp_url"],
+                output_rtsp_url=settings["output_rtsp_url"],
+                use_hwaccel=settings["use_hwaccel"],
+                preview_width=settings["preview_width"],
+                preview_height=settings["preview_height"],
+                model_path=settings["model_path"],
+                detector_conf=settings["detector_conf"],
             )
             continue
 
@@ -136,13 +100,15 @@ def main():
                     runtime_state.mode = "idle"
                 continue
 
+            settings = get_current_app_settings()
+
             run_images_batch_session(
                 input_dir=test_input_dir,
                 output_dir=test_output_dir,
                 fps=test_fps or 5,
-                cfg=cfg,
-                model_path=model_path,
-                detector_conf=detector_conf,
+                cfg=settings["cfg"],
+                model_path=settings["model_path"],
+                detector_conf=settings["detector_conf"],
             )
 
             # После batch-сессии переходим в режим ожидания команды.

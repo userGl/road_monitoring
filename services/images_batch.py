@@ -91,6 +91,10 @@ def run_images_batch_session(
     results: List[Dict[str, Any]] = []
     processed_frames = 0
 
+    # Фиксируем стартовые значения модели и порога.
+    initial_model_path = model_path
+    initial_confidence_threshold = detector_conf
+
     try:
         for packet in camera.frames():
             # На каждом "кадре" сначала применяем накопившиеся runtime-изменения,
@@ -175,9 +179,35 @@ def run_images_batch_session(
     finally:
         camera.release()
 
+    # Фиксируем финальные значения модели и порога с учётом runtime-изменений.
+    final_model_path = getattr(runtime_state, "model_path", initial_model_path)
+    final_confidence_threshold = getattr(
+        getattr(runtime_state, "yolo_stage", None),
+        "conf",
+        initial_confidence_threshold,
+    )
+
     json_path = output_path / "detections_tracks.json"
     with json_path.open("w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+        json.dump(
+            {
+                "meta": {
+                    "initial_model_path": initial_model_path,
+                    "initial_confidence_threshold": float(
+                        initial_confidence_threshold
+                    ),
+                    "final_model_path": final_model_path,
+                    "final_confidence_threshold": float(
+                        final_confidence_threshold
+                    ),
+                    "frames_processed": processed_frames,
+                },
+                "frames": results,
+            },
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
 
     print(
         f"[main] Images batch session finished: {processed_frames} frames processed, "

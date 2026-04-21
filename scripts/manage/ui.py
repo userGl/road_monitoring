@@ -17,7 +17,7 @@ def print_config(cfg: dict) -> None:
 
     print()
     print("================ CURRENT CONFIG ================")
-    print(f"stream.enable_output_stream  : {stream_enabled}")
+    print(f"stream.enable_output_stream : {stream_enabled}")
     print(f"detector.confidence_threshold: {detector_conf}")
     print(f"detector.model_path          : {model_path}")
     print("===============================================")
@@ -47,17 +47,17 @@ def pause(msg: str = "Нажми Enter, чтобы продолжить...") -> 
     input(msg)
 
 
-def control_menu(cfg: dict) -> None:
+def app_mode_menu(cfg: dict) -> None:
     while True:
         status = api.load_control_status()
         print_control_status(status)
 
-        print("=============== УПРАВЛЕНИЕ ===============")
-        print("1) Включить idle")
-        print("2) Включить rtsp")
-        print("3) Batch image")
+        print("============= РЕЖИМ ПРИЛОЖЕНИЯ =============")
+        print("1) Включить режим idle")
+        print("2) Включить режим rtsp")
+        print("3) Запустить batch image")
         print("0) Назад")
-        print("==========================================")
+        print("============================================")
         print()
 
         action = input("Выбор: ").strip()
@@ -77,7 +77,7 @@ def control_menu(cfg: dict) -> None:
             print("Некорректный выбор")
 
 
-def launch_menu() -> None:
+def process_control_menu() -> None:
     rtsp_label = START_RTSP_SCRIPT.name
     viewer_label = VIEW_RTSP_SCRIPT.name
 
@@ -86,7 +86,7 @@ def launch_menu() -> None:
         rtsp_pid = read_pid_file(RTSP_PUBLISHER_PID_FILE) if is_managed_process_running(RTSP_PUBLISHER_PID_FILE) else None
 
         print()
-        print("============== УПРАВЛЕНИЕ ЗАПУСКОМ ==============")
+        print("=========== УПРАВЛЕНИЕ ПРОЦЕССАМИ ===========")
         print(f"1) Запустить симуляцию видеокамеры ({rtsp_label})" + (f" [RUNNING PID {rtsp_pid}]" if rtsp_pid else ""))
         print(f"2) Запустить приложение (main.py в venv)" + (f" [RUNNING PID {main_pid}]" if main_pid else ""))
         print("3) Вкл/выкл RTSP output (stream.enable_output_stream)")
@@ -94,7 +94,7 @@ def launch_menu() -> None:
         print("5) Остановить симуляцию видеокамеры")
         print("6) Остановить приложение")
         print("0) Назад")
-        print("===============================================")
+        print("=============================================")
         print()
 
         action = input("Выбор: ").strip()
@@ -126,14 +126,14 @@ def main_loop() -> None:
         cfg = api.load_config()
 
         if cfg is None:
-            print("Открою меню управления запуском — оттуда можно запустить приложение.")
-            launch_menu()
+            print("Открою меню управления процессами — оттуда можно запустить приложение.")
+            process_control_menu()
             continue
 
         print_config(cfg)
         print("Что сделать?")
-        print("1) Управление запуском")
-        print("2) Управление")
+        print("1) Управление процессами")
+        print("2) Режим приложения")
         print("3) Изменить detector.confidence_threshold")
         print("4) Изменить detector.model_path")
         print("5) Показать полный JSON")
@@ -143,9 +143,9 @@ def main_loop() -> None:
         action = input("Выбор: ").strip()
 
         if action == "1":
-            launch_menu()
+            process_control_menu()
         elif action == "2":
-            control_menu(cfg)
+            app_mode_menu(cfg)
         elif action == "3":
             actions.change_confidence(cfg)
         elif action == "4":
