@@ -1,3 +1,4 @@
+# services/rtsp_session.py
 from sensors.ffmpeg_camera import FFmpegRTSPCamera
 from sensors.rtsp_streamer import create_rtsp_streamer
 
@@ -45,7 +46,8 @@ def run_rtsp_session(
     yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
 
     # На старте output stream может быть ещё не поднят,
-    # поэтому пайплайн собираем без DrawDetectionsStage.
+    # поэтому пайплайн сначала собираем без DrawDetectionsStage.
+    # Tracker stage при этом остаётся включённым.
     draw_enabled = False
     pipeline = build_pipeline(
         preview_width=preview_width,
@@ -105,7 +107,8 @@ def run_rtsp_session(
             )
 
             # Если RTSP streamer был аварийно отключён после серии рестартов,
-            # убираем его из main-loop. Пайплайн ниже будет пересобран без draw-stage.
+            # убираем его из main-loop. Пайплайн ниже будет пересобран без draw-stage,
+            # но tracker stage останется включённым.
             if streamer is not None and streamer.is_disabled():
                 streamer.stop()
                 streamer = None
@@ -146,6 +149,7 @@ def run_rtsp_session(
 
             # Если режим output stream изменился, пересобираем пайплайн:
             # без draw-stage, когда стрим выключен, и с draw-stage, когда включён.
+            # Tracker stage включён всегда.
             if draw_enabled != last_draw_enabled:
                 pipeline = build_pipeline(
                     preview_width=preview_width,

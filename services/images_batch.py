@@ -1,3 +1,4 @@
+# services/images_batch.py
 from pathlib import Path
 import json
 from typing import Any, Dict, List
@@ -16,6 +17,7 @@ from core.runtime_config import (
     snapshot_applied_config,
     apply_runtime_changes,
 )
+
 from core import runtime_state
 
 from services.pipeline_builder import build_pipeline
@@ -34,7 +36,7 @@ def run_images_batch_session(
     Тестовый режим: однократная обработка папки с изображениями через пайплайн.
 
     Здесь:
-    - создаётся пайплайн (Resize -> Yolo -> Draw);
+    - создаётся пайплайн (Resize -> Yolo -> Tracker -> Draw);
     - источник кадров — ImageFolderCamera;
     - кадры прогоняются через pipeline;
     - аннотированные кадры и JSON сохраняются в output_dir.
@@ -77,11 +79,13 @@ def run_images_batch_session(
     enable_output_stream = get_nested(
         cfg, "stream", "enable_output_stream", default=True
     )
+
     sync_runtime_targets(
         enable_output_stream=enable_output_stream,
         confidence_threshold=detector_conf,
         model_path=model_path,
     )
+
     last_applied_cfg: Dict[str, Any] = snapshot_applied_config(
         enable_output_stream=enable_output_stream,
         confidence_threshold=detector_conf,
@@ -140,12 +144,14 @@ def run_images_batch_session(
                 detections_json.append(
                     {
                         "bbox": det.get("bbox"),
-                        "score": float(det.get("score", 0.0)),
+                        "confidence": float(det.get("confidence", 0.0)),
+                        "track_score": float(det.get("track_score", 0.0)),
                         "class_id": int(det.get("class_id", -1)),
                         "class_name": det.get("class_name"),
                         "track_id": det.get("track_id"),
                         "is_new": bool(det.get("is_new", False)),
                         "is_lost": bool(det.get("is_lost", False)),
+                        "track_confirmed": bool(det.get("track_confirmed", False)),
                     }
                 )
 
@@ -155,10 +161,15 @@ def run_images_batch_session(
                     {
                         "track_id": int(tr.get("track_id", -1)),
                         "bbox": tr.get("bbox"),
-                        "score": float(tr.get("score", 0.0)),
+                        "pred_bbox": tr.get("pred_bbox"),
+                        "confidence": float(tr.get("confidence", 0.0)),
+                        "best_confidence": float(tr.get("best_confidence", 0.0)),
                         "class_id": int(tr.get("class_id", -1)),
                         "class_name": tr.get("class_name"),
-                        "is_active": bool(tr.get("is_active", True)),
+                        "confirmed": bool(tr.get("confirmed", False)),
+                        "hit_count": int(tr.get("hit_count", 0)),
+                        "miss_count": int(tr.get("miss_count", 0)),
+                        "age": int(tr.get("age", 0)),
                     }
                 )
 
@@ -174,6 +185,7 @@ def run_images_batch_session(
                     "tracks": tracks_json,
                 }
             )
+
             processed_frames += 1
 
     finally:

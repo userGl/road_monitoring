@@ -2,7 +2,7 @@
 from typing import Protocol
 import cv2
 
-from sensors.ffmpeg_camera import FramePacket
+from core.frame_packet import FramePacket
 from inference.yolo_detector import YoloDetector
 
 
@@ -38,7 +38,10 @@ class YoloDetectionStage:
 
     def __call__(self, packet: FramePacket) -> FramePacket:
         image = packet.resized_frame if packet.resized_frame is not None else packet.frame
-        packet.detections = self.detector.detect(image, confidence_threshold=self.conf)
+        packet.detections = self.detector.detect(
+            image,
+            confidence_threshold=self.conf,
+        )
         return packet
 
 
@@ -54,7 +57,12 @@ class DrawDetectionsStage:
 
         for det in packet.detections:
             x1, y1, x2, y2 = map(int, det["bbox"])
-            label = f'{det["class_name"]} {det["confidence"]:.2f}'
+
+            track_id = det.get("track_id")
+            if track_id is not None:
+                label = f'#{track_id} {det["class_name"]} {det["confidence"]:.2f}'
+            else:
+                label = f'{det["class_name"]} {det["confidence"]:.2f}'
 
             cv2.rectangle(img, (x1, y1), (x2, y2), self.color, self.thickness)
             cv2.putText(

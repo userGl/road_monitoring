@@ -1,3 +1,4 @@
+# core/frame_packet.py
 from dataclasses import dataclass, field
 from typing import Optional, Any, Dict, List
 import numpy as np
@@ -41,12 +42,17 @@ class FramePacket:
 
     resized_frame: Optional[np.ndarray] = None
 
-    # Детекции: можно оставить как list[dict], но договориться о ключах:
-    # bbox, score, class_id, class_name, track_id, is_new, is_lost
+    # Детекции текущего кадра.
+    # Базовые поля приходят из detector: bbox, confidence, class_id, class_name.
+    # После tracker stage детекция может быть дополнена полями:
+    # track_id, track_score, is_new, is_lost, track_confirmed.
     detections: List[Dict[str, Any]] = field(default_factory=list)
 
     # Треки на текущем кадре (агрегированная информация от трекера)
     tracks: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Информация о motion compensation / global shift
+    motion: Dict[str, Any] = field(default_factory=dict)
 
     annotated_frame: Optional[np.ndarray] = None
 
