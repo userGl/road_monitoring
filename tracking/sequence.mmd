@@ -1,0 +1,98 @@
+sequenceDiagram
+    autonumber
+    participant VP as VideoPipeline
+    participant P as FramePacket
+    participant R as ResizeStage
+    participant Y as YoloDetectionStage
+    participant TS as RDDTrackerStage
+    participant T as RDDTracker
+    participant D as DrawDetectionsStage
+
+    Note over VP,D: Порядок стадий pipeline: Resize -> YOLO -> Tracker -> Draw
+    VP->>R: __call__(packet)
+    R->>P: читает packet.frame
+    R->>P: resized_frame = resize(packet.frame)
+    R-->>VP: packet
+
+    VP->>Y: __call__(packet)
+    alt resized_frame существует
+        Y->>P: читает packet.resized_frame
+    else resized_frame отсутствует
+        Y->>P: читает packet.frame
+    end
+    Y->>P: detections = detector.detect(image, confidence_threshold=conf)
+    Y-->>VP: packet
+
+    VP->>TS: __call__(packet)
+    alt resized_frame существует
+        TS->>P: читает packet.resized_frame
+    else resized_frame отсутствует
+        TS->>P: читает packet.frame
+    end
+    TS->>P: читает packet.detections
+    TS->>P: читает packet.frame_id
+    TS->>T: update(frame, detections, frame_id)
+
+    Note over T: Внутренний алгоритм трекера
+    T->>T: _to_gray(frame)
+
+    alt use_motion_compensation = True
+        T->>T: build_motion_roi_mask(h, w)
+        T->>T: estimate_global_shift(prev_gray, gray, roi_mask)
+        Note over T: goodFeaturesToTrack + calcOpticalFlowPyrLK + фильтрация выбросов
+    else use_motion_compensation = False
+        T->>T: shift = ShiftEstimate(reason="motion_disabled")
+    end
+
+    T->>T: last_shift = shift
+    T->>T: predicted_bbox = predict_bbox(track, shift, frame.shape) для всех активных треков
+    T->>T: match_detections(detections, frame.shape)
+    Note over T: Матчинг по class_id, distance gate и match_score
+
+    loop Для всех совпавших пар (track_id, det_idx, score)
+        T->>T: add_observation(frame_id, bbox, confidence)
+        T->>T: при hit_count >= confirm_hits -> confirmed = True
+        T->>T: записывает в detection: track_id, track_score, is_new, track_confirmed
+    end
+
+    loop Для всех unmatched_track_ids
+        T->>T: mark_missed()
+    end
+
+    loop Для всех unmatched_det_indices
+        alt confidence < new_track_min_conf
+            T->>T: detection остаётся без нового трека
+            T->>T: track_id = None, track_score = 0.0
+        else confidence >= new_track_min_conf
+            T->>T: _create_track(class_id, class_name, bbox, confidence, frame_id)
+            T->>T: записывает в detection новый track_id
+        end
+    end
+
+    loop Для всех активных треков
+        alt miss_count > max_misses
+            T->>T: формирует lost event
+            T->>T: удаляет трек из tracks
+        else трек ещё активен
+            T->>T: добавляет трек в active_tracks
+        end
+    end
+
+    T->>T: prev_gray = gray
+    T-->>TS: tracked_detections, active_tracks, shift
+
+    TS->>P: packet.detections = tracked_detections
+    TS->>P: packet.tracks = active_tracks
+    TS->>P: packet.motion = {dx, dy, ok, num_features, num_tracked, num_inliers, spread, reason}
+    TS-->>VP: packet
+
+    VP->>D: __call__(packet)
+    alt resized_frame существует
+        D->>P: читает packet.resized_frame
+    else resized_frame отсутствует
+        D->>P: читает packet.frame
+    end
+    D->>P: читает packet.detections
+    Note over D: Использует bbox, class_name, confidence и track_id
+    D->>P: packet.annotated_frame = draw(detections)
+    D-->>VP: packet

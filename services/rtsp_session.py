@@ -14,7 +14,7 @@ from core.runtime_config import (
 
 from core import runtime_state
 
-from services.pipeline_builder import build_pipeline
+from services.pipeline_builder import build_pipeline, make_pipeline
 
 
 def run_rtsp_session(
@@ -49,12 +49,14 @@ def run_rtsp_session(
     # поэтому пайплайн сначала собираем без DrawDetectionsStage.
     # Tracker stage при этом остаётся включённым.
     draw_enabled = False
-    pipeline = build_pipeline(
+    pipeline, tracker_stage = build_pipeline(
         preview_width=preview_width,
         preview_height=preview_height,
         yolo_stage=yolo_stage,
         draw_enabled=draw_enabled,
     )
+    runtime_state.tracker_stage = tracker_stage
+
     last_draw_enabled = draw_enabled
 
     runtime_state.yolo_stage = yolo_stage
@@ -151,10 +153,11 @@ def run_rtsp_session(
             # без draw-stage, когда стрим выключен, и с draw-stage, когда включён.
             # Tracker stage включён всегда.
             if draw_enabled != last_draw_enabled:
-                pipeline = build_pipeline(
+                pipeline = make_pipeline(
                     preview_width=preview_width,
                     preview_height=preview_height,
                     yolo_stage=yolo_stage,
+                    tracker_stage=tracker_stage,
                     draw_enabled=draw_enabled,
                 )
                 last_draw_enabled = draw_enabled

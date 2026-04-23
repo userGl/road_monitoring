@@ -7,7 +7,6 @@ import cv2
 
 from sensors.image_folder_camera import ImageFolderCamera
 
-from pipeline.core import VideoPipeline
 from pipeline.stages import YoloDetectionStage
 from inference.yolo_detector import YoloDetector
 
@@ -68,12 +67,13 @@ def run_images_batch_session(
 
     # В тестовом режиме отрисовка всегда включена, чтобы сразу видеть результат.
     draw_enabled = True
-    pipeline: VideoPipeline = build_pipeline(
+    pipeline, tracker_stage = build_pipeline(
         preview_width=preview_width,
         preview_height=preview_height,
         yolo_stage=yolo_stage,
         draw_enabled=draw_enabled,
     )
+    runtime_state.tracker_stage = tracker_stage
 
     # Инициализация runtime-targets и слепка применённой конфигурации.
     enable_output_stream = get_nested(

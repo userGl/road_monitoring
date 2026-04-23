@@ -16,3 +16,5 @@ mode_lock = RLock()
 test_input_dir: Optional[str] = None
 test_output_dir: Optional[str] = None
 test_fps: Optional[int] = None
+
+tracker_stage: Optional[Any] = None

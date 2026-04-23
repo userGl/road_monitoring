@@ -1,0 +1,121 @@
+classDiagram
+    direction LR
+
+    class FramePacket {
+        +int frame_id
+        +np.ndarray frame
+        +float ts_monotonic
+        +float ts_wall
+        +Optional[np.ndarray] resized_frame
+        +List[Dict[str, Any]] detections
+        +List[Dict[str, Any]] tracks
+        +Dict[str, Any] motion
+        +Optional[np.ndarray] annotated_frame
+        +Dict[str, Any] meta
+    }
+
+    class RDDTrackerStage {
+        +str name = "rdd_tracker"
+        +RDDTracker tracker
+        +__call__(packet: FramePacket) FramePacket
+    }
+
+    class RDDTracker {
+        +int confirm_hits
+        +int max_misses
+        +float min_match_score
+        +float new_track_min_conf
+        +int history_size
+        +bool use_motion_compensation
+        +bool debug
+        +Dict[int, RDDTrack] tracks
+        +int next_track_id
+        +Optional[np.ndarray] prev_gray
+        +ShiftEstimate last_shift
+        +float w_iou
+        +float w_dist
+        +float w_scale
+        +float w_conf
+        +reset() None
+        +update(frame, detections, frame_id) Tuple
+        +build_motion_roi_mask(h, w) np.ndarray
+        +estimate_global_shift(prev_gray, curr_gray, roi_mask) ShiftEstimate
+        +predict_bbox(track, shift, frame_shape) BBox
+        +match_detections(detections, frame_shape) Tuple
+        +match_score(track, det_bbox, det_conf) float
+        +max_match_distance(bbox) float
+        +_create_track(class_id, class_name, bbox, confidence, frame_id) RDDTrack
+        +_to_gray(frame) np.ndarray
+        +_as_bbox(bbox_like) BBox
+        +center_distance(a, b) float
+        +area_ratio(a, b) float
+        +compute_iou(a, b) float
+        +clip_bbox(bbox, w, h) BBox
+        +is_valid_bbox(bbox) bool
+    }
+
+    class RDDTrack {
+        +int track_id
+        +int class_id
+        +str class_name
+        +BBox last_bbox
+        +float last_confidence
+        +int created_frame
+        +int last_seen_frame
+        +int hit_count
+        +int miss_count
+        +bool confirmed
+        +float best_confidence
+        +Optional[BBox] predicted_bbox
+        +deque history
+        +add_observation(frame_id, bbox, confidence) None
+        +mark_missed() None
+        +age int
+    }
+
+    class TrackObservation {
+        +int frame_id
+        +BBox bbox
+        +float confidence
+    }
+
+    class ShiftEstimate {
+        +float dx
+        +float dy
+        +bool ok
+        +int num_features
+        +int num_tracked
+        +int num_inliers
+        +float spread
+        +str reason
+    }
+
+    class ResizeStage {
+        +str name = "resize_for_model"
+        +int width
+        +int height
+        +__call__(packet: FramePacket) FramePacket
+    }
+
+    class YoloDetectionStage {
+        +str name = "yolo_inference"
+        +YoloDetector detector
+        +float conf
+        +__call__(packet: FramePacket) FramePacket
+    }
+
+    class DrawDetectionsStage {
+        +str name = "draw_detections"
+        +tuple color
+        +int thickness
+        +__call__(packet: FramePacket) FramePacket
+    }
+
+    RDDTrackerStage --> RDDTracker : использует
+    RDDTrackerStage --> FramePacket : обновляет
+    RDDTracker --> RDDTrack : управляет
+    RDDTrack --> TrackObservation : хранит историю
+    RDDTracker --> ShiftEstimate : вычисляет
+    ResizeStage --> FramePacket : изменяет
+    YoloDetectionStage --> FramePacket : заполняет detections
+    DrawDetectionsStage --> FramePacket : записывает annotated_frame
