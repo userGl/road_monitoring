@@ -1,6 +1,10 @@
-# services/pipeline_builder.py  
+# services/pipeline_builder.py
 from pipeline.core import VideoPipeline
-from pipeline.stages import ResizeStage, YoloDetectionStage, DrawDetectionsStage
+from pipeline.stages import (
+    PreprocessStage,
+    YoloDetectionStage,
+    DrawDetectionsStage,
+)
 from tracking.rdd_tracker import RDDTracker
 from tracking.tracker_stage import RDDTrackerStage
 
@@ -11,11 +15,18 @@ def make_pipeline(
     yolo_stage: YoloDetectionStage,
     tracker_stage: RDDTrackerStage,
     draw_enabled: bool,
+    preprocess_mode: str = "direct_resize",
+    crop_top_ratio: float = 0.0,
 ) -> VideoPipeline:
     """Собирает пайплайн обработки кадров с уже существующим tracker stage."""
 
     stages = [
-        ResizeStage(width=preview_width, height=preview_height),
+        PreprocessStage(
+            mode=preprocess_mode,
+            model_width=preview_width,
+            model_height=preview_height,
+            crop_top_ratio=crop_top_ratio,
+        ),
         yolo_stage,
         tracker_stage,
     ]
@@ -31,10 +42,12 @@ def build_pipeline(
     preview_height: int,
     yolo_stage: YoloDetectionStage,
     draw_enabled: bool,
+    preprocess_mode: str = "direct_resize",
+    crop_top_ratio: float = 0.0,
 ) -> tuple[VideoPipeline, RDDTrackerStage]:
     """Собирает пайплайн обработки кадров.
 
-    Базовый пайплайн: ресайз -> детекция -> трекинг.
+    Базовый пайплайн: предобработка -> детекция -> трекинг.
     При включённой отрисовке добавляется DrawDetectionsStage.
     """
     tracker_stage = RDDTrackerStage(RDDTracker())
@@ -45,6 +58,8 @@ def build_pipeline(
         yolo_stage=yolo_stage,
         tracker_stage=tracker_stage,
         draw_enabled=draw_enabled,
+        preprocess_mode=preprocess_mode,
+        crop_top_ratio=crop_top_ratio,
     )
 
     return pipeline, tracker_stage

@@ -28,11 +28,14 @@ class FramePacket:
         frame: Исходный кадр в формате BGR.
         ts_monotonic: Монотонная временная метка для синхронизации.
         ts_wall: Системное время получения кадра.
-        resized_frame: Кадр после ресайза, если он выполнялся в пайплайне.
+        model_input_frame: Кадр, подготовленный для подачи в модель.
+        preprocess_meta: Служебная информация о предобработке кадра
+            (режим, scale, padding и т.п.), если она выполнялась в пайплайне.
         detections: Список результатов детекции для кадра.
         tracks: Список треков / ассоциаций на текущем кадре.
         annotated_frame: Кадр с нанесёнными боксами, подписями и другой разметкой.
-        meta: Произвольная служебная информация (например, путь до входного файла в images-режиме).
+        meta: Произвольная служебная информация
+            (например, путь до входного файла в images-режиме).
     """
 
     frame_id: int
@@ -40,7 +43,8 @@ class FramePacket:
     ts_monotonic: float
     ts_wall: float
 
-    resized_frame: Optional[np.ndarray] = None
+    model_input_frame: Optional[np.ndarray] = None
+    preprocess_meta: Dict[str, Any] = field(default_factory=dict)
 
     # Детекции текущего кадра.
     # Базовые поля приходят из detector: bbox, confidence, class_id, class_name.
