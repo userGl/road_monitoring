@@ -10,8 +10,8 @@ from tracking.tracker_stage import RDDTrackerStage
 
 
 def make_pipeline(
-    preview_width: int,
-    preview_height: int,
+    model_input_width: int,
+    model_input_height: int,
     yolo_stage: YoloDetectionStage,
     tracker_stage: RDDTrackerStage,
     draw_enabled: bool,
@@ -23,8 +23,8 @@ def make_pipeline(
     stages = [
         PreprocessStage(
             mode=preprocess_mode,
-            model_width=preview_width,
-            model_height=preview_height,
+            model_width=model_input_width,
+            model_height=model_input_height,
             crop_top_ratio=crop_top_ratio,
         ),
         yolo_stage,
@@ -38,8 +38,8 @@ def make_pipeline(
 
 
 def build_pipeline(
-    preview_width: int,
-    preview_height: int,
+    model_input_width: int,
+    model_input_height: int,
     yolo_stage: YoloDetectionStage,
     draw_enabled: bool,
     preprocess_mode: str = "direct_resize",
@@ -53,13 +53,12 @@ def build_pipeline(
     tracker_stage = RDDTrackerStage(RDDTracker())
 
     pipeline = make_pipeline(
-        preview_width=preview_width,
-        preview_height=preview_height,
+        model_input_width=model_input_width,
+        model_input_height=model_input_height,
         yolo_stage=yolo_stage,
         tracker_stage=tracker_stage,
         draw_enabled=draw_enabled,
         preprocess_mode=preprocess_mode,
         crop_top_ratio=crop_top_ratio,
     )
-
     return pipeline, tracker_stage

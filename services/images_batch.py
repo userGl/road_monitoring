@@ -62,14 +62,14 @@ def run_images_batch_session(
     runtime_state.yolo_stage = yolo_stage
 
     # Используем размеры предпросмотра из общего конфига.
-    preview_width = int(get_nested(cfg, "preview", "width", default=640))
-    preview_height = int(get_nested(cfg, "preview", "height", default=640))
+    model_input_width = int(get_nested(cfg, "model_input", "width", default=640))
+    model_input_height = int(get_nested(cfg, "model_input", "height", default=640))
 
     # В тестовом режиме отрисовка всегда включена, чтобы сразу видеть результат.
     draw_enabled = True
     pipeline, tracker_stage = build_pipeline(
-        preview_width=preview_width,
-        preview_height=preview_height,
+        model_input_width=model_input_width,
+        model_input_height=model_input_height,
         yolo_stage=yolo_stage,
         draw_enabled=draw_enabled,
     )

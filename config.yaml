@@ -16,11 +16,10 @@ stream:
 camera:
   use_hwaccel: true
 
-preview:
+model_input:
   width: 640
   height: 640
 
 detector:
-  model_path: models/YOLOv8_Small_RDD.pt
   model_path: models/YOLOv8_Small_RDD.pt
   confidence_threshold: 0.05

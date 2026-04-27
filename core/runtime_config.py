@@ -176,8 +176,8 @@ def init_app_config_from_file(config_path: str | Path | None = None) -> None:
 
     use_hwaccel = get_nested(cfg_file, "camera", "use_hwaccel", default=False)
 
-    preview_width = int(get_nested(cfg_file, "preview", "width", default=640))
-    preview_height = int(get_nested(cfg_file, "preview", "height", default=640))
+    model_input_width = int(get_nested(cfg_file, "model_input", "width", default=640))
+    model_input_height = int(get_nested(cfg_file, "model_input", "height", default=640))
 
     model_path = get_nested(
         cfg_file, "detector", "model_path", default=DEFAULT_MODEL_PATH
@@ -196,9 +196,9 @@ def init_app_config_from_file(config_path: str | Path | None = None) -> None:
             "camera": {
                 "use_hwaccel": use_hwaccel,
             },
-            "preview": {
-                "width": preview_width,
-                "height": preview_height,
+            "model_input": {
+                "width": model_input_width,
+                "height": model_input_height,
             },
             "detector": {
                 "confidence_threshold": detector_conf,
@@ -229,8 +229,8 @@ def get_current_app_settings() -> dict[str, Any]:
 
     use_hwaccel = get_nested(cfg, "camera", "use_hwaccel", default=False)
 
-    preview_width = int(get_nested(cfg, "preview", "width", default=640))
-    preview_height = int(get_nested(cfg, "preview", "height", default=640))
+    model_input_width = int(get_nested(cfg, "model_input", "width", default=640))
+    model_input_height = int(get_nested(cfg, "model_input", "height", default=640))
 
     model_path = get_nested(
         cfg, "detector", "model_path", default=DEFAULT_MODEL_PATH
@@ -245,8 +245,8 @@ def get_current_app_settings() -> dict[str, Any]:
         "output_rtsp_url": output_rtsp_url,
         "enable_output_stream": enable_output_stream,
         "use_hwaccel": use_hwaccel,
-        "preview_width": preview_width,
-        "preview_height": preview_height,
+        "model_input_width": model_input_width,
+        "model_input_height": model_input_height,
         "model_path": model_path,
         "detector_conf": detector_conf,
     }

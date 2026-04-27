@@ -83,8 +83,8 @@ def main():
                 input_rtsp_url=settings["input_rtsp_url"],
                 output_rtsp_url=settings["output_rtsp_url"],
                 use_hwaccel=settings["use_hwaccel"],
-                preview_width=settings["preview_width"],
-                preview_height=settings["preview_height"],
+                model_input_width=settings["model_input_width"],
+                model_input_height=settings["model_input_height"],
                 model_path=settings["model_path"],
                 detector_conf=settings["detector_conf"],
             )
