@@ -12,7 +12,7 @@ class RDDTrackerStage:
         self.tracker = tracker
 
     def __call__(self, packet: FramePacket) -> FramePacket:
-        image = packet.resized_frame if packet.resized_frame is not None else packet.frame
+        image = packet.frame
 
         tracked_detections, tracks, shift = self.tracker.update(
             frame=image,

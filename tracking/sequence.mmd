@@ -2,33 +2,45 @@ sequenceDiagram
     autonumber
     participant VP as VideoPipeline
     participant P as FramePacket
-    participant R as ResizeStage
+    participant R as PreprocessStage
     participant Y as YoloDetectionStage
     participant TS as RDDTrackerStage
     participant T as RDDTracker
     participant D as DrawDetectionsStage
 
-    Note over VP,D: Порядок стадий pipeline: Resize -> YOLO -> Tracker -> Draw
+    Note over VP,D: Порядок стадий pipeline: Preprocess -> YOLO -> Tracker -> Draw
     VP->>R: __call__(packet)
     R->>P: читает packet.frame
-    R->>P: resized_frame = resize(packet.frame)
+
+    alt mode = direct_resize
+        R->>P: model_input_frame = resize(packet.frame)
+        R->>P: preprocess_meta = {mode, src_size, roi, dst_size, scale_x, scale_y}
+    else mode = bottom_crop_resize
+        R->>P: roi = нижняя часть кадра после crop сверху
+        R->>P: model_input_frame = resize(roi)
+        R->>P: preprocess_meta = {mode, src_size, roi, dst_size, scale_x, scale_y}
+    end
     R-->>VP: packet
 
     VP->>Y: __call__(packet)
-    alt resized_frame существует
-        Y->>P: читает packet.resized_frame
-    else resized_frame отсутствует
+    alt model_input_frame существует
+        Y->>P: читает packet.model_input_frame
+    else model_input_frame отсутствует
         Y->>P: читает packet.frame
     end
     Y->>P: detections = detector.detect(image, confidence_threshold=conf)
+
+    alt preprocess_meta существует
+        Y->>Y: map_detections_to_original(detections, preprocess_meta)
+        Note over Y: bbox переводятся из model-space в координаты оригинального кадра
+    else preprocess_meta отсутствует
+        Note over Y: detections остаются без remap
+    end
+    Y->>P: packet.detections = detections
     Y-->>VP: packet
 
     VP->>TS: __call__(packet)
-    alt resized_frame существует
-        TS->>P: читает packet.resized_frame
-    else resized_frame отсутствует
-        TS->>P: читает packet.frame
-    end
+    TS->>P: читает packet.frame
     TS->>P: читает packet.detections
     TS->>P: читает packet.frame_id
     TS->>T: update(frame, detections, frame_id)
@@ -87,12 +99,8 @@ sequenceDiagram
     TS-->>VP: packet
 
     VP->>D: __call__(packet)
-    alt resized_frame существует
-        D->>P: читает packet.resized_frame
-    else resized_frame отсутствует
-        D->>P: читает packet.frame
-    end
+    D->>P: читает packet.frame
     D->>P: читает packet.detections
     Note over D: Использует bbox, class_name, confidence и track_id
-    D->>P: packet.annotated_frame = draw(detections)
+    D->>P: packet.annotated_frame = draw(detections) на оригинальном кадре
     D-->>VP: packet

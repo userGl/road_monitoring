@@ -168,16 +168,12 @@ def run_rtsp_session(
 
             # Приоритет отправки:
             # 1. annotated_frame — если кадр уже размечен;
-            # 2. resized_frame — если есть только ресайз;
-            # 3. frame — исходный кадр как fallback.
+            # 2. frame — исходный кадр как fallback.
             frame_to_send = (
                 packet.annotated_frame
                 if packet.annotated_frame is not None
-                else packet.resized_frame
-                if packet.resized_frame is not None
                 else packet.frame
             )
-
             if streamer is not None and not streamer.is_disabled():
                 streamer.write(frame_to_send)
 

@@ -1,7 +1,7 @@
 sequenceDiagram
     participant VP as VideoPipeline
     participant P as FramePacket
-    participant R as ResizeStage
+    participant R as PreprocessStage
     participant Y as YoloDetectionStage
     participant TS as RDDTrackerStage
     participant T as RDDTracker
@@ -10,16 +10,18 @@ sequenceDiagram
     Note over VP,P: На входе packet содержит сырое изображение frame
 
     VP->>R: __call__(packet)
-    R->>P: resized_frame = resize(frame)
+    R->>P: model_input_frame = preprocess(frame)
+    R->>P: preprocess_meta = {mode, src_size, roi, dst_size, scale_x, scale_y}
     R-->>VP: packet
 
     VP->>Y: __call__(packet)
-    Y->>P: image = resized_frame или frame
+    Y->>P: image = model_input_frame или frame
     Y->>P: detections = detector.detect(image, conf)
+    Y->>Y: map_detections_to_original(detections, preprocess_meta)
     Y-->>VP: packet
 
     VP->>TS: __call__(packet)
-    TS->>P: читает frame / resized_frame, detections, frame_id
+    TS->>P: читает frame, detections, frame_id
     TS->>T: update(frame, detections, frame_id)
     T-->>TS: tracked_detections, active_tracks, shift
     TS->>P: detections = tracked_detections
@@ -28,7 +30,7 @@ sequenceDiagram
     TS-->>VP: packet
 
     VP->>D: __call__(packet)
-    D->>P: image = resized_frame или frame
+    D->>P: image = frame
     D->>P: читает detections (в т.ч. track_id)
-    D->>P: annotated_frame = draw(image, detections)
+    D->>P: annotated_frame = draw(frame, detections)
     D-->>VP: packet

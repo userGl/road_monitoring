@@ -6,7 +6,8 @@ classDiagram
         +np.ndarray frame
         +float ts_monotonic
         +float ts_wall
-        +Optional[np.ndarray] resized_frame
+        +Optional[np.ndarray] model_input_frame
+        +Dict preprocess_meta
         +List[Dict[str, Any]] detections
         +List[Dict[str, Any]] tracks
         +Dict[str, Any] motion

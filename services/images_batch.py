@@ -111,18 +111,15 @@ def run_images_batch_session(
             # Прогоняем кадр через все стадии пайплайна.
             packet = pipeline.process(packet)
 
+
             # Приоритет сохранения:
             # 1. annotated_frame — если кадр уже размечен;
-            # 2. resized_frame — если есть только ресайз;
-            # 3. frame — исходный кадр как fallback.
+            # 2. frame — исходный кадр как fallback.
             frame_to_save = (
                 packet.annotated_frame
                 if packet.annotated_frame is not None
-                else packet.resized_frame
-                if packet.resized_frame is not None
                 else packet.frame
             )
-
             # Имя выходного файла такое же, как у входного.
             input_path_str = packet.meta.get("input_path")
             if input_path_str:
