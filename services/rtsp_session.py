@@ -1,11 +1,11 @@
 # services/rtsp_session.py
+import time
+
 from sensors.ffmpeg_camera import FFmpegRTSPCamera
 from sensors.rtsp_streamer import create_rtsp_streamer
 
-
 from pipeline.stages import YoloDetectionStage
 from inference.yolo_detector import YoloDetector
-
 
 from core.runtime_config import (
     get_nested,
@@ -14,12 +14,9 @@ from core.runtime_config import (
     apply_runtime_changes,
 )
 
-
 from core import runtime_state
 
-
 from services.pipeline_builder import build_pipeline, make_pipeline
-
 
 
 def _make_even(value: int) -> int:
@@ -30,7 +27,6 @@ def _make_even(value: int) -> int:
     return value if value % 2 == 0 else value - 1
 
 
-
 def _get_output_stream_size(camera_meta) -> tuple[int, int]:
     """Возвращает half-resolution размер выходного потока по метаданным камеры."""
     src_width = int(camera_meta.width)
@@ -38,8 +34,8 @@ def _get_output_stream_size(camera_meta) -> tuple[int, int]:
 
     output_width = _make_even(src_width // 2)
     output_height = _make_even(src_height // 2)
-    return output_width, output_height
-
+    # return output_width, output_height
+    return 1920, 1080 # ставим для тестирования временно?
 
 
 def run_rtsp_session(
@@ -57,7 +53,6 @@ def run_rtsp_session(
     Одна RTSP-сессия: подключается к входному RTSP-потоку,
     создаёт пайплайн обработки кадров и при необходимости публикует выходной RTSP-поток.
 
-
     Сессия завершается:
     - при ошибке камеры или стримера;
     - при смене режима работы (runtime_state.mode != "rtsp").
@@ -66,12 +61,10 @@ def run_rtsp_session(
     camera = FFmpegRTSPCamera(input_rtsp_url, use_hwaccel=use_hwaccel)
     print("[main] RTSP input started, API on :8081")
 
-
     meta_printed = False
     streamer = None
     detector = YoloDetector(model_path=model_path)
     yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
-
 
     # На старте output stream может быть ещё не поднят,
     # поэтому пайплайн сначала собираем без DrawDetectionsStage.
@@ -85,12 +78,9 @@ def run_rtsp_session(
     )
     runtime_state.tracker_stage = tracker_stage
 
-
     last_draw_enabled = draw_enabled
 
-
     runtime_state.yolo_stage = yolo_stage
-
 
     # Сохраняем в runtime_state целевые значения конфигурации.
     # REST API меняет именно эти поля, а main-loop применяет их к живым объектам.
@@ -103,7 +93,6 @@ def run_rtsp_session(
         model_path=model_path,
     )
 
-
     # Храним отдельный слепок уже ПРИМЕНЁННОЙ конфигурации.
     # Он нужен, чтобы main-loop мог понять, что именно изменилось с прошлого кадра.
     last_applied_cfg = snapshot_applied_config(
@@ -112,14 +101,25 @@ def run_rtsp_session(
         model_path=model_path,
     )
 
+    # --- DEBUG TIMING STATE ---
+    frame_counter = 0
+    last_loop_ts = time.monotonic()
+    sum_loop_dt = 0.0
+    sum_proc_dt = 0.0
+    sum_write_dt = 0.0
+    LOG_EVERY_N = 50
+    # --------------------------
 
     def should_stop_rtsp() -> bool:
         with runtime_state.mode_lock:
             return getattr(runtime_state, "mode", "rtsp") != "rtsp"
 
-
     try:
         for packet in camera.frames(should_stop=should_stop_rtsp):
+            loop_now = time.monotonic()
+            loop_dt = loop_now - last_loop_ts
+            last_loop_ts = loop_now
+
             # Выходим из RTSP-сессии при смене режима (по команде API).
             with runtime_state.mode_lock:
                 if getattr(runtime_state, "mode", "rtsp") != "rtsp":
@@ -129,13 +129,11 @@ def run_rtsp_session(
                     )
                     break
 
-
             # Печатаем метаданные входного видеопотока один раз,
             # когда ffprobe/ffmpeg уже успешно открыли поток.
             if not meta_printed and camera.meta is not None:
                 print(f"[main] Video meta: {camera.meta}")
                 meta_printed = True
-
 
             # На каждом кадре сначала применяем накопившиеся runtime-изменения,
             # и только потом работаем со streamer и пайплайном.
@@ -143,7 +141,6 @@ def run_rtsp_session(
                 last_applied_cfg=last_applied_cfg,
                 yolo_stage=yolo_stage,
             )
-
 
             # Если RTSP streamer был аварийно отключён после серии рестартов,
             # убираем его из main-loop. Пайплайн ниже будет пересобран без draw-stage,
@@ -153,14 +150,12 @@ def run_rtsp_session(
                 streamer = None
                 print("[main] RTSP streamer disabled after failures")
 
-
             # Если output stream выключили через runtime-config,
             # останавливаем стример.
             if not runtime_state.enable_output_stream and streamer is not None:
                 streamer.stop()
                 streamer = None
                 print("[main] RTSP output stopped")
-
 
             # Лениво поднимаем выходной RTSP-стример только после того,
             # как стали известны параметры входного потока.
@@ -182,14 +177,12 @@ def run_rtsp_session(
                     f"({output_width}x{output_height} @ {fps} fps)"
                 )
 
-
             # Отрисовка нужна только тогда, когда реально активен output stream.
             draw_enabled = (
                 runtime_state.enable_output_stream
                 and streamer is not None
                 and not streamer.is_disabled()
             )
-
 
             # Если режим output stream изменился, пересобираем пайплайн:
             # без draw-stage, когда стрим выключен, и с draw-stage, когда включён.
@@ -205,10 +198,11 @@ def run_rtsp_session(
                 last_draw_enabled = draw_enabled
                 print(f"[main] Pipeline rebuilt: draw_enabled={draw_enabled}")
 
-
-            # Прогоняем кадр через все стадии пайплайна.
+            # Прогоняем кадр через все стадии пайплайна с измерением времени.
+            t_proc_start = time.monotonic()
             packet = pipeline.process(packet)
-
+            t_proc_end = time.monotonic()
+            proc_dt = t_proc_end - t_proc_start
 
             # Приоритет отправки:
             # 1. annotated_frame — если кадр уже размечен;
@@ -218,9 +212,36 @@ def run_rtsp_session(
                 if packet.annotated_frame is not None
                 else packet.frame
             )
+
+            t_write_start = time.monotonic()
             if streamer is not None and not streamer.is_disabled():
                 streamer.write(frame_to_send)
+            t_write_end = time.monotonic()
+            write_dt = t_write_end - t_write_start
 
+            # --- DEBUG TIMING ACCUMULATION ---
+            frame_counter += 1
+            sum_loop_dt += loop_dt
+            sum_proc_dt += proc_dt
+            sum_write_dt += write_dt
+
+            if frame_counter % LOG_EVERY_N == 0:
+                avg_loop_ms = (sum_loop_dt / LOG_EVERY_N) * 1000.0
+                avg_proc_ms = (sum_proc_dt / LOG_EVERY_N) * 1000.0
+                avg_write_ms = (sum_write_dt / LOG_EVERY_N) * 1000.0
+                print(
+                    f"[timing] last {LOG_EVERY_N} frames: "
+                    f"loop={avg_loop_ms:.1f} ms, "
+                    f"proc={avg_proc_ms:.1f} ms, "
+                    f"write={avg_write_ms:.1f} ms"
+                )
+                sum_loop_dt = sum_proc_dt = sum_write_dt = 0.0
+
+                # Отчёт по стадиям пайплайна
+                profiler = getattr(pipeline, "profiler", None)
+                if profiler is not None:
+                    profiler.report_and_reset(LOG_EVERY_N)
+            # ---------------------------------
 
     finally:
         # Корректно освобождаем ресурсы при завершении приложения.

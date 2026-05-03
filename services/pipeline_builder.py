@@ -4,37 +4,43 @@ from pipeline.stages import (
     PreprocessStage,
     YoloDetectionStage,
     DrawDetectionsStage,
+    StageProfiler,
 )
 from tracking.rdd_tracker import RDDTracker
 from tracking.tracker_stage import RDDTrackerStage
 
 
 def make_pipeline(
+    *,
     model_input_width: int,
     model_input_height: int,
     yolo_stage: YoloDetectionStage,
-    tracker_stage: RDDTrackerStage,
+    tracker_stage,
     draw_enabled: bool,
     preprocess_mode: str = "direct_resize",
     crop_top_ratio: float = 0.0,
-) -> VideoPipeline:
-    """Собирает пайплайн обработки кадров с уже существующим tracker stage."""
+):
+    profiler = StageProfiler(enabled=True)
 
     stages = [
-        PreprocessStage(
-            mode=preprocess_mode,
-            model_width=model_input_width,
-            model_height=model_input_height,
-            crop_top_ratio=crop_top_ratio,
+        profiler.wrap(
+            PreprocessStage(
+                mode=preprocess_mode,
+                model_width=model_input_width,
+                model_height=model_input_height,
+                crop_top_ratio=crop_top_ratio,
+            )
         ),
-        yolo_stage,
-        tracker_stage,
+        profiler.wrap(yolo_stage),
+        profiler.wrap(tracker_stage),
     ]
 
     if draw_enabled:
-        stages.append(DrawDetectionsStage())
+        stages.append(profiler.wrap(DrawDetectionsStage()))
 
-    return VideoPipeline(stages=stages)
+    pipeline = VideoPipeline(stages=stages)
+    pipeline.profiler = profiler
+    return pipeline
 
 
 def build_pipeline(

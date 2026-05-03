@@ -21,7 +21,7 @@ class RTSPStreamerConfig:
     width: int
     height: int
     fps: int = 25
-    bitrate: str = "2M"
+    bitrate: str = "4M"
     codec: str = "libx264"
     preset: str = "veryfast"
     transport: str = "tcp"
@@ -99,7 +99,7 @@ class RTSPStreamer:
         for line in iter(proc.stderr.readline, b""):
             text = line.decode("utf-8", errors="replace").strip()
             if text:
-                self.logger.warning("[ffmpeg] %s", text)
+                self.logger.warning("[ffmpeg-streamer] %s", text)
 
     def _spawn_locked(self) -> None:
         """Запускает новый ffmpeg-процесс.
@@ -312,7 +312,7 @@ def create_rtsp_streamer(
     height: int,
     fps: int = 25,
     *,
-    bitrate: str = "2M",
+    bitrate: str = "4M",
     preset: str = "veryfast",
     transport: str = "tcp",
     resize_if_needed: bool = True,

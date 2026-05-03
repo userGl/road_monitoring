@@ -109,14 +109,21 @@ class RDDTracker:
         detections: List[Dict[str, Any]],
         frame_id: int,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], ShiftEstimate]:
+        
         gray = self._to_gray(frame)
 
         if self.use_motion_compensation:
-            roi_mask = self.build_motion_roi_mask(gray.shape[0], gray.shape[1])
-            shift = self.estimate_global_shift(self.prev_gray, gray, roi_mask=roi_mask)
+            x1, y1, x2, y2 = self.get_motion_roi_rect(gray.shape[0], gray.shape[1])
+
+            prev_roi = None
+            if self.prev_gray is not None:
+                prev_roi = self.prev_gray[y1:y2, x1:x2]
+
+            curr_roi = gray[y1:y2, x1:x2]
+            shift = self.estimate_global_shift(prev_roi, curr_roi)
         else:
             shift = ShiftEstimate(reason="motion_disabled")
-
+        
         self.last_shift = shift
 
         for track in self.tracks.values():
@@ -212,22 +219,23 @@ class RDDTracker:
         self.prev_gray = gray
         return detections, active_tracks, shift
 
-    def build_motion_roi_mask(self, h: int, w: int) -> np.ndarray:
-        mask = np.zeros((h, w), dtype=np.uint8)
+    def get_motion_roi_rect(self, h: int, w: int) -> tuple[int, int, int, int]:
+        x1 = int(w * 0.20)
+        x2 = int(w * 0.80)
+        y1 = int(h * 0.50)
+        y2 = int(h * 0.85)
 
-        x1 = int(w * 0.15)
-        x2 = int(w * 0.85)
-        y1 = int(h * 0.35)
-        y2 = int(h * 0.95)
+        x1 = max(0, min(x1, w - 1))
+        x2 = max(x1 + 1, min(x2, w))
+        y1 = max(0, min(y1, h - 1))
+        y2 = max(y1 + 1, min(y2, h))
 
-        mask[y1:y2, x1:x2] = 255
-        return mask
+        return x1, y1, x2, y2
 
     def estimate_global_shift(
         self,
         prev_gray: Optional[np.ndarray],
         curr_gray: np.ndarray,
-        roi_mask: Optional[np.ndarray] = None,
     ) -> ShiftEstimate:
         if prev_gray is None:
             return ShiftEstimate(reason="no_prev_frame")
@@ -241,7 +249,6 @@ class RDDTracker:
             qualityLevel=0.01,
             minDistance=10,
             blockSize=7,
-            mask=roi_mask,
         )
         if features is None:
             return ShiftEstimate(reason="no_features")

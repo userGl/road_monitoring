@@ -1,6 +1,6 @@
-# pipeline/stages.py
 from typing import Protocol
 import cv2
+import time
 
 from core.frame_packet import FramePacket
 from inference.yolo_detector import YoloDetector
@@ -101,7 +101,7 @@ class PreprocessStage:
             roi_w = src_w
             roi_h = src_h - top_cut
 
-            roi = frame[roi_y:roi_y + roi_h, roi_x:roi_x + roi_w]
+            roi = frame[roi_y : roi_y + roi_h, roi_x : roi_x + roi_w]
 
             model_input = cv2.resize(
                 roi,
@@ -190,3 +190,45 @@ class DrawDetectionsStage:
 
         packet.annotated_frame = img
         return packet
+
+
+class StageProfiler:
+    def __init__(self, enabled: bool = False):
+        self.enabled = enabled
+        self.reset()
+
+    def reset(self) -> None:
+        self.timings = {}  # name -> (total_time, count)
+
+    def wrap(self, stage):
+        """Оборачивает Stage, чтобы мерить время его __call__."""
+        if not self.enabled:
+            return stage
+
+        profiler = self
+
+        class WrappedStage:
+            name = getattr(stage, "name", stage.__class__.__name__)
+
+            def __init__(self, inner):
+                self._inner = inner
+
+            def __call__(self, packet: FramePacket) -> FramePacket:
+                t0 = time.monotonic()
+                out = self._inner(packet)
+                dt = time.monotonic() - t0
+                total, cnt = profiler.timings.get(self.name, (0.0, 0))
+                profiler.timings[self.name] = (total + dt, cnt + 1)
+                return out
+
+        # stage здесь уже инстанс, заворачиваем его
+        return WrappedStage(stage)
+
+    def report_and_reset(self, n_frames: int) -> None:
+        if not self.enabled:
+            return
+        print(f"[profile] per-stage timings over {n_frames} frames:")
+        for name, (total, cnt) in self.timings.items():
+            avg_ms = (total / max(cnt, 1)) * 1000.0
+            print(f"  {name}: {avg_ms:.2f} ms")
+        self.reset()

@@ -185,7 +185,7 @@ class FFmpegRTSPCamera:
             except Exception:
                 continue
             if line:
-                print(f"[ffmpeg] {line}", file=sys.stderr)
+                print(f"[ffmpeg-camera] {line}", file=sys.stderr)
 
     def release(self) -> None:
         """Корректно завершает ffmpeg-процесс и сбрасывает счётчики.
