@@ -3,7 +3,7 @@
 # Конфигурация тестового входного RTSP потока
 # Эти настройки используются скриптами публикации тестового видео
 vlc:
-  video: test_videos/2023_0814_090243_039A_SOS.MOV
+  video: test_videos/car_3.mkv
   rtsp_port: 8554
   rtsp_path: live
 

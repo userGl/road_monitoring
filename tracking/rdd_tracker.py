@@ -198,6 +198,10 @@ class RDDTracker:
         shift: ShiftEstimate,
         frame_shape: Tuple[int, ...],
     ) -> BBox:
+        """Строит прогноз bbox на текущем кадре.
+
+        К последнему bbox прибавляется глобальный shift кадра.
+        """
         h, w = frame_shape[:2]
         x1, y1, x2, y2 = track.last_bbox
 

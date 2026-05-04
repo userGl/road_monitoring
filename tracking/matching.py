@@ -24,12 +24,25 @@ class TrackMatcher:
         tracks: Dict[int, RDDTrack],
         detections: List[Dict[str, Any]],
     ) -> Tuple[List[Tuple[int, int, float]], List[int], List[int]]:
+        """Сопоставляет текущие детекции с активными треками.
+
+        Для каждой пары «трек-детекция» вычисляется итоговый score.
+        Затем пары сортируются по score и выбираются жадно, без повторного
+        использования одного и того же трека или детекции.
+        """
         candidate_pairs: List[Tuple[float, int, int]] = []
         track_ids = list(tracks.keys())
 
+        # Кандидатные пары сначала отфильтровываются по class_id и расстоянию
+        # между центрами до вычисления полного score. Это позволяет заранее
+        # отсечь явно некорректные соответствия.
         for track_id in track_ids:
             track = tracks[track_id]
-            pred_bbox = track.predicted_bbox if track.predicted_bbox is not None else track.last_bbox
+            pred_bbox = (
+                track.predicted_bbox
+                if track.predicted_bbox is not None
+                else track.last_bbox
+            )
 
             for det_idx, det in enumerate(detections):
                 det_class_id = int(det.get("class_id", -1))
@@ -43,7 +56,11 @@ class TrackMatcher:
                 if dist > gate_dist:
                     continue
 
-                score = self.match_score(track, det_bbox, float(det.get("confidence", 0.0)))
+                score = self.match_score(
+                    track,
+                    det_bbox,
+                    float(det.get("confidence", 0.0)),
+                )
                 if score >= self.min_match_score:
                     candidate_pairs.append((score, track_id, det_idx))
 
@@ -53,6 +70,8 @@ class TrackMatcher:
         matched_dets = set()
         matches: List[Tuple[int, int, float]] = []
 
+        # Жадного назначения здесь достаточно, потому что детекций немного,
+        # а итоговый score уже учитывает геометрическую согласованность.
         for score, track_id, det_idx in candidate_pairs:
             if track_id in matched_tracks or det_idx in matched_dets:
                 continue
@@ -66,7 +85,21 @@ class TrackMatcher:
         return matches, unmatched_track_ids, unmatched_det_indices
 
     def match_score(self, track: RDDTrack, det_bbox: BBox, det_conf: float) -> float:
-        pred_bbox = track.predicted_bbox if track.predicted_bbox is not None else track.last_bbox
+        """Вычисляет итоговый score сопоставления track ↔ detection.
+
+        Score объединяет четыре фактора:
+        - IoU между predicted_bbox и bbox детекции;
+        - близость центров;
+        - близость площади bbox;
+        - уверенность (confidence) детекции.
+
+        Чем больше score, тем правдоподобнее соответствие.
+        """
+        pred_bbox = (
+            track.predicted_bbox
+            if track.predicted_bbox is not None
+            else track.last_bbox
+        )
 
         s_iou = compute_iou(pred_bbox, det_bbox)
 

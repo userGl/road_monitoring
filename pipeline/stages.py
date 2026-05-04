@@ -1,3 +1,4 @@
+# pipeline/stages.py
 from typing import Protocol
 import cv2
 import time
