@@ -34,10 +34,18 @@ projects/
 
 .python-version/
 
-training/*
-!training/training_pictures/**
-!training/*.ipynb
-!training/results_raw.xlsx
+training/mlruns/
+training/runs/
+training/models/
+training/pretrained_models/
+training/**/*.pt
+training/**/*.onnx
+training/**/*.engine
+
+# Датасеты
+training/datasets/**
+!training/datasets/.gitkeep
+!training/datasets/README.md
 
 test_videos/*
 !test_videos/download_link.md

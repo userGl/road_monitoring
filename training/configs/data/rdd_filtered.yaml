@@ -1,0 +1,37 @@
+# Dataset Path
+path: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/datasets/RDD_filtered
+train:
+- Japan/images/train
+- India/images/train
+- Czech/images/train
+- Norway/images/train
+- United_States/images/train
+- China_Drone/images/train
+- China_MotorBike/images/train
+val:
+- Japan/images/val
+- India/images/val
+- Czech/images/val
+- Norway/images/val
+- United_States/images/val
+- China_Drone/images/val
+- China_MotorBike/images/val
+test:
+- Japan/images/test
+- India/images/test
+- Czech/images/test
+- Norway/images/test
+- United_States/images/test
+- China_Drone/images/test
+- China_MotorBike/images/test
+
+# Кол-во классов
+nc: 4
+
+# Имена классов (можно менять — на обучение не влияет, только на отображение)
+names:
+  0: D00_Longitudinal_Crack  # Продольная трещина
+  1: D10_Transverse_Crack    # Поперечная трещина
+  2: D20_Alligator_Crack     # Сетка трещин
+  3: D40_Pothole             # Яма
+

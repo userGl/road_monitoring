@@ -1,0 +1,61 @@
+task: detect
+mode: train
+
+model: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/runs/rdd_split/yolov8s2/weights/epoch40.pt
+data: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/rdd_split.yaml
+
+epochs: 25
+patience: 18
+batch: 32
+imgsz: 640
+device: "0"
+workers: 4
+
+project: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/runs/rdd_split
+name: yolov8s_finetune_5
+exist_ok: false
+save: true
+save_period: 5
+plots: true
+
+pretrained: true
+optimizer: auto
+seed: 1337
+deterministic: true
+rect: false
+val: true
+split: val
+
+# LR
+cos_lr: true
+lr0: 0.0025        # было 0.001
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 2
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# усилина классификация
+box: 7.5
+cls: 0.8
+dfl: 1.5
+nbs: 64
+
+# Аугментации
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+degrees: 5.0
+translate: 0.1
+scale: 0.25
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+mosaic: 0.3
+mixup: 0.1
+copy_paste: 0.1
+close_mosaic: 5
+auto_augment: randaugment
+erasing: 0.4

@@ -1,0 +1,17 @@
+# Ultralytics YOLO dataset config (RDD_SPLIT)
+# Корень датасета: training/datasets/RDD_SPLIT
+
+# Относительно `path`
+train: train/images
+val: val/images
+test: test/images
+
+# Кол-во классов
+nc: 4
+
+# Имена классов (можно менять — на обучение не влияет, только на отображение)
+names:
+  0: D00  # Продольная трещина
+  1: D10  # Поперечная трещина
+  2: D20  # Крокодиловая трещина (сетка трещин)
+  3: D40  # Яма
