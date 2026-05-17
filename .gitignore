@@ -20,32 +20,22 @@ Thumbs.db
 *.tmp
 *.log
 
-# PDF и Word файлы (если не нужны в репозитории)
-# *.pdf
-# *.docx
-
-# Скрипты конвертации (опционально)
-# convert_*.py
-
-convert_pdf_to_md.py
-convert_word_to_md.py
-Tasks.docx
-projects/
-
 .python-version/
 
 training/mlruns/
 training/runs/
 training/models/
 training/pretrained_models/
-training/**/*.pt
-training/**/*.onnx
-training/**/*.engine
 
 # Датасеты
 training/datasets/**
 !training/datasets/.gitkeep
 !training/datasets/README.md
+!training/datasets/RDD/
+!training/datasets/RDD/Czech/
+!training/datasets/RDD/India/
+!training/datasets/RDD/Japan/
+!training/datasets/RDD/United_States/
 !training/datasets/RDD/Czech/data.yaml
 !training/datasets/RDD/Czech/dataset_split.csv
 !training/datasets/RDD/India/data.yaml
