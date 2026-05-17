@@ -46,6 +46,14 @@ training/**/*.engine
 training/datasets/**
 !training/datasets/.gitkeep
 !training/datasets/README.md
+!training/datasets/RDD/Czech/data.yaml
+!training/datasets/RDD/Czech/dataset_split.csv
+!training/datasets/RDD/India/data.yaml
+!training/datasets/RDD/India/dataset_split.csv
+!training/datasets/RDD/Japan/data.yaml
+!training/datasets/RDD/Japan/dataset_split.csv
+!training/datasets/RDD/United_States/data.yaml
+!training/datasets/RDD/United_States/dataset_split.csv
 
 test_videos/*
 !test_videos/download_link.md

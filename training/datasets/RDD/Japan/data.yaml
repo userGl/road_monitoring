@@ -1,0 +1,4 @@
+train: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/datasets/RDD/Japan/train/images
+val: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/datasets/RDD/Japan/train/images
+nc: 4
+names: ['Longitudinal Cracks', 'Transverse Cracks', 'Alligator Cracks', 'Potholes']

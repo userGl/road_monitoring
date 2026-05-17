@@ -1,5 +1,6 @@
 # Ultralytics YOLO dataset config (RDD_SPLIT)
 # Корень датасета: training/datasets/RDD_SPLIT
+path: training/datasets/RDD_SPLIT
 
 # Относительно `path`
 train: train/images

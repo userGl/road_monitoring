@@ -1,0 +1,8 @@
+train: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/datasets/RDD/Czech/train/images
+val: /home/gleb/Документы/33.VKR/mvp/road_monitoring/training/datasets/RDD/Czech/train/images
+nc: 4
+names:
+  0: D00  # Продольная трещина
+  1: D10  # Поперечная трещина
+  2: D20  # Крокодиловая трещина (сетка трещин)
+  3: D40  # Яма
