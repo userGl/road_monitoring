@@ -161,30 +161,96 @@ class YoloDetectionStage:
 class DrawDetectionsStage:
     name = "draw_detections"
 
-    def __init__(self, color=(0, 255, 0), thickness: int = 2):
-        self.color = color
+    def __init__(
+        self,
+        det_color=(0, 255, 0),
+        track_color=(0, 0, 255),
+        pred_color=(0, 255, 255),
+        thickness: int = 2,
+        pred_thickness: int = 1,
+        draw_predictions: bool = True,
+        draw_motion_debug: bool = True,
+    ):
+        self.det_color = det_color
+        self.track_color = track_color
+        self.pred_color = pred_color
         self.thickness = thickness
+        self.pred_thickness = pred_thickness
+        self.draw_predictions = draw_predictions
+        self.draw_motion_debug = draw_motion_debug
 
     def __call__(self, packet: FramePacket) -> FramePacket:
         img = packet.frame.copy()
 
+        # Отрисовка predicted bbox активных треков жёлтым цветом
+        if self.draw_predictions and packet.tracks:
+            for tr in packet.tracks:
+                pred_bbox = tr.get("pred_bbox")
+                if not pred_bbox:
+                    continue
+
+                px1, py1, px2, py2 = map(int, pred_bbox)
+                track_id = tr.get("track_id", "?")
+
+                cv2.rectangle(
+                    img,
+                    (px1, py1),
+                    (px2, py2),
+                    self.pred_color,
+                    self.pred_thickness,
+                )
+
+                cv2.putText(
+                    img,
+                    f"pred #{track_id}",
+                    (px1, min(py2 + 15, img.shape[0] - 5)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    self.pred_color,
+                    1,
+                    cv2.LINE_AA,
+                )
+
+        # Отрисовка реальных детекций зеленым цветом.
         for det in packet.detections:
             x1, y1, x2, y2 = map(int, det["bbox"])
 
             track_id = det.get("track_id")
             if track_id is not None:
+                color = self.track_color
                 label = f'#{track_id} {det["class_name"]} {det["confidence"]:.2f}'
             else:
+                color = self.det_color
                 label = f'{det["class_name"]} {det["confidence"]:.2f}'
 
-            cv2.rectangle(img, (x1, y1), (x2, y2), self.color, self.thickness)
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, self.thickness)
             cv2.putText(
                 img,
                 label,
                 (x1, max(y1 - 5, 0)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
-                self.color,
+                color,
+                1,
+                cv2.LINE_AA,
+            )
+
+        # Отладочная информация по motion compensation.
+        if self.draw_motion_debug and packet.motion:
+            dx = packet.motion.get("dx", 0.0)
+            dy = packet.motion.get("dy", 0.0)
+            ok = packet.motion.get("ok", False)
+            reason = packet.motion.get("reason", "n/a")
+            inliers = packet.motion.get("num_inliers", 0)
+
+            debug_text = f"motion dx={dx:.2f} dy={dy:.2f} ok={ok} inliers={inliers} reason={reason}"
+            cv2.putText(
+                img,
+                debug_text,
+                (10, 20),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 0, 255),
                 1,
                 cv2.LINE_AA,
             )
