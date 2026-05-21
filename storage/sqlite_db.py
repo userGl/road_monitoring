@@ -29,7 +29,13 @@ def init_db(conn: sqlite3.Connection) -> None:
             last_bbox_x2 REAL NOT NULL,
             last_bbox_y2 REAL NOT NULL,
 
+            best_bbox_x1 REAL,
+            best_bbox_y1 REAL,
+            best_bbox_x2 REAL,
+            best_bbox_y2 REAL,
+
             best_confidence REAL NOT NULL,
+            best_frame_id INTEGER,
             last_seen_frame INTEGER NOT NULL,
             age INTEGER NOT NULL,
             confirmed INTEGER NOT NULL DEFAULT 1,

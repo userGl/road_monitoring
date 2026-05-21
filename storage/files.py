@@ -1,14 +1,9 @@
-# storage/files.py
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 
 import cv2
 import numpy as np
-
-BBox = Tuple[float, float, float, float]
-
 
 class FileStorage:
     def __init__(self, data_dir: str | Path = "data") -> None:
@@ -21,29 +16,22 @@ class FileStorage:
         run_dir.mkdir(parents=True, exist_ok=True)
         return run_dir
 
-    def save_crop_image(
+    def save_track_crop(
         self,
-        frame: np.ndarray,
-        bbox: BBox,
+        crop: np.ndarray,
         run_id: int,
         track_id: int,
+        class_name: str,
+        frame_id: int | None = None,
         ext: str = ".jpg",
     ) -> str:
         run_dir = self.ensure_run_dir(run_id)
 
-        x1, y1, x2, y2 = map(int, bbox)
-        h, w = frame.shape[:2]
+        if crop is None or crop.size == 0:
+            raise ValueError("Empty crop image")
 
-        x1 = max(0, min(x1, w - 1))
-        y1 = max(0, min(y1, h - 1))
-        x2 = max(0, min(x2, w))
-        y2 = max(0, min(y2, h))
-
-        if x2 <= x1 or y2 <= y1:
-            raise ValueError(f"Invalid bbox for crop: {(x1, y1, x2, y2)}")
-
-        crop = frame[y1:y2, x1:x2]
-        out_path = run_dir / f"track_{track_id:06d}{ext}"
+        suffix = f"_frame_{frame_id:06d}" if frame_id is not None else ""
+        out_path = run_dir / f"track_{track_id:06d}{suffix}{ext}"
 
         ok = cv2.imwrite(str(out_path), crop)
         if not ok:

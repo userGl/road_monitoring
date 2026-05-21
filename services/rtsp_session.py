@@ -18,6 +18,10 @@ from core import runtime_state
 
 from services.pipeline_builder import build_pipeline, make_pipeline
 
+from storage.sqlite_db import create_connection, init_db
+from storage.files import FileStorage
+from storage.repository import TrackResultRepository
+from storage.storage_stage import StorageStage
 
 def _make_even(value: int) -> int:
     """Округляет размер вниз до ближайшего чётного значения."""
@@ -66,6 +70,17 @@ def run_rtsp_session(
     detector = YoloDetector(model_path=model_path)
     yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
 
+    conn = create_connection("data/events.db")
+    init_db(conn)
+    file_storage = FileStorage("data")
+    repository = TrackResultRepository(conn)
+    run_id = int(time.time())
+    storage_stage = StorageStage(
+        run_id=run_id,
+        file_storage=file_storage,
+        repository=repository,
+    )
+
     # На старте output stream может быть ещё не поднят,
     # поэтому пайплайн сначала собираем без DrawDetectionsStage.
     # Tracker stage при этом остаётся включённым.
@@ -75,6 +90,7 @@ def run_rtsp_session(
         model_input_height=model_input_height,
         yolo_stage=yolo_stage,
         draw_enabled=draw_enabled,
+        storage_stage=storage_stage,
     )
     runtime_state.tracker_stage = tracker_stage
 
@@ -194,6 +210,7 @@ def run_rtsp_session(
                     yolo_stage=yolo_stage,
                     tracker_stage=tracker_stage,
                     draw_enabled=draw_enabled,
+                   storage_stage=storage_stage,
                 )
                 last_draw_enabled = draw_enabled
                 print(f"[main] Pipeline rebuilt: draw_enabled={draw_enabled}")
@@ -248,3 +265,4 @@ def run_rtsp_session(
         if streamer is not None:
             streamer.stop()
         camera.release()
+        conn.close()

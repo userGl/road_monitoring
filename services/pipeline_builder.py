@@ -17,6 +17,7 @@ def make_pipeline(
     yolo_stage: YoloDetectionStage,
     tracker_stage,
     draw_enabled: bool,
+    storage_stage=None,
     preprocess_mode: str = "direct_resize",
     crop_top_ratio: float = 0.0,
 ):
@@ -35,6 +36,9 @@ def make_pipeline(
         profiler.wrap(tracker_stage),
     ]
 
+    if storage_stage is not None:
+        stages.append(profiler.wrap(storage_stage))
+
     if draw_enabled:
         stages.append(profiler.wrap(DrawDetectionsStage()))
 
@@ -42,12 +46,12 @@ def make_pipeline(
     pipeline.profiler = profiler
     return pipeline
 
-
 def build_pipeline(
     model_input_width: int,
     model_input_height: int,
     yolo_stage: YoloDetectionStage,
     draw_enabled: bool,
+    storage_stage=None,
     preprocess_mode: str = "direct_resize",
     crop_top_ratio: float = 0.0,
 ) -> tuple[VideoPipeline, RDDTrackerStage]:
@@ -64,6 +68,7 @@ def build_pipeline(
         yolo_stage=yolo_stage,
         tracker_stage=tracker_stage,
         draw_enabled=draw_enabled,
+        storage_stage=storage_stage,
         preprocess_mode=preprocess_mode,
         crop_top_ratio=crop_top_ratio,
     )

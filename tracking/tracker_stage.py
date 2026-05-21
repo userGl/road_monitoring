@@ -14,7 +14,7 @@ class RDDTrackerStage:
     def __call__(self, packet: FramePacket) -> FramePacket:
         image = packet.frame
 
-        tracked_detections, tracks, shift = self.tracker.update(
+        tracked_detections, tracks, lost_events, shift = self.tracker.update(
             frame=image,
             detections=packet.detections,
             frame_id=packet.frame_id,
@@ -22,6 +22,7 @@ class RDDTrackerStage:
 
         packet.detections = tracked_detections
         packet.tracks = tracks
+        packet.lost_tracks = lost_events
         packet.motion = {
             "dx": round(shift.dx, 4),
             "dy": round(shift.dy, 4),

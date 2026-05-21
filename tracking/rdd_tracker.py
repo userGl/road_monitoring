@@ -11,9 +11,9 @@ from .matching import TrackMatcher
 from .models import BBox, RDDTrack, ShiftEstimate, TrackObservation
 from .motion import MotionEstimator
 
-
 class RDDTracker:
     """Лёгкий multi-object tracker для дефектов дороги.
+
 
     Трекер сопоставляет детекции между кадрами по комбинации IoU, расстояния
     между центрами, близости масштаба и confidence. При включённой
@@ -59,7 +59,7 @@ class RDDTracker:
         frame: np.ndarray,
         detections: List[Dict[str, Any]],
         frame_id: int,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], ShiftEstimate]:
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], ShiftEstimate]:
         """Обновляет трекер по новому кадру и текущим детекциям.
 
         На каждом шаге:
@@ -104,6 +104,13 @@ class RDDTracker:
             conf = float(det.get("confidence", 0.0))
             track = self.tracks[track_id]
             track.add_observation(frame_id=frame_id, bbox=bbox, confidence=conf)
+            self._update_best_observation(
+                track=track,
+                frame=frame,
+                frame_id=frame_id,
+                bbox=bbox,
+                confidence=conf,
+            )
             # Если трек ещё не подтверждён, но набрал достаточно наблюдений,
             # то подтверждаем его.
             if not track.confirmed and track.hit_count >= self.confirm_hits:
@@ -140,6 +147,7 @@ class RDDTracker:
                 bbox=bbox,
                 confidence=conf,
                 frame_id=frame_id,
+                frame=frame,
             )
 
             det["track_id"] = track.track_id
@@ -153,18 +161,26 @@ class RDDTracker:
         expired_ids = []
         for track_id, track in self.tracks.items():
             if track.miss_count > self.max_misses:
-                lost_events.append(
-                    {
-                        "track_id": track.track_id,
-                        "class_id": track.class_id,
-                        "class_name": track.class_name,
-                        "last_bbox": [round(v, 2) for v in track.last_bbox],
-                        "best_confidence": round(track.best_confidence, 4),
-                        "last_seen_frame": track.last_seen_frame,
-                        "age": track.age,
-                        "is_lost": True,
-                    }
-                )
+                if track.confirmed:
+                    lost_events.append(
+                        {
+                            "track_id": track.track_id,
+                            "class_id": track.class_id,
+                            "class_name": track.class_name,
+                            "last_bbox": [round(v, 2) for v in track.last_bbox],
+                            "best_bbox": [round(v, 2) for v in track.best_bbox] if track.best_bbox else None,
+                            "best_confidence": round(track.best_confidence, 4),
+                            "best_frame_id": track.best_frame_id,
+                            "best_crop": track.best_crop,
+                            "best_crop_shape": list(track.best_crop_shape) if track.best_crop_shape else None,
+                            "last_seen_frame": track.last_seen_frame,
+                            "age": track.age,
+                            "position_meters": track.position_meters,
+                            "saved_to_storage": track.saved_to_storage,
+                            "confirmed": track.confirmed,
+                            "is_lost": True,
+                        }
+                    )
                 expired_ids.append(track_id)
 
         for track_id in expired_ids:
@@ -181,6 +197,9 @@ class RDDTracker:
                     "pred_bbox": [round(v, 2) for v in (track.predicted_bbox or track.last_bbox)],
                     "confidence": round(track.last_confidence, 4),
                     "best_confidence": round(track.best_confidence, 4),
+                    "best_bbox": [round(v, 2) for v in track.best_bbox] if track.best_bbox else None,
+                    "best_frame_id": track.best_frame_id,
+                    "has_best_crop": track.best_crop is not None,
                     "confirmed": track.confirmed,
                     "hit_count": track.hit_count,
                     "miss_count": track.miss_count,
@@ -190,7 +209,8 @@ class RDDTracker:
         # Сохраняем текущий grayscale-кадр для оценки optical flow
         # на следующем шаге обновлени
         self.prev_gray = gray
-        return detections, active_tracks, shift
+        return detections, active_tracks, lost_events, shift
+
 
     def predict_bbox(
         self,
@@ -222,7 +242,10 @@ class RDDTracker:
         bbox: BBox,
         confidence: float,
         frame_id: int,
+        frame: np.ndarray,
     ) -> RDDTrack:
+        crop = self._extract_crop(frame, bbox)
+
         track = RDDTrack(
             track_id=self.next_track_id,
             class_id=class_id,
@@ -235,6 +258,10 @@ class RDDTracker:
             miss_count=0,
             confirmed=False,
             best_confidence=confidence,
+            best_bbox=bbox,
+            best_frame_id=frame_id,
+            best_crop=crop,
+            best_crop_shape=(crop.shape[:2] if crop is not None else None),
             history=deque(
                 [TrackObservation(frame_id, bbox, confidence)],
                 maxlen=self.history_size,
@@ -243,6 +270,49 @@ class RDDTracker:
         self.tracks[track.track_id] = track
         self.next_track_id += 1
         return track
+
+
+    def _update_best_observation(
+        self,
+        track: RDDTrack,
+        frame: np.ndarray,
+        frame_id: int,
+        bbox: BBox,
+        confidence: float,
+    ) -> None:
+        if confidence < track.best_confidence:
+            return
+
+        crop = self._extract_crop(frame, bbox)
+        if crop is None:
+            return
+
+        track.best_confidence = confidence
+        track.best_bbox = bbox
+        track.best_frame_id = frame_id
+        track.best_crop = crop
+        track.best_crop_shape = crop.shape[:2]
+
+
+    @staticmethod
+    def _extract_crop(frame: np.ndarray, bbox: BBox) -> np.ndarray | None:
+        h, w = frame.shape[:2]
+        x1, y1, x2, y2 = map(int, bbox)
+
+        x1 = max(0, min(x1, w - 1))
+        y1 = max(0, min(y1, h - 1))
+        x2 = max(0, min(x2, w))
+        y2 = max(0, min(y2, h))
+
+        if x2 <= x1 or y2 <= y1:
+            return None
+
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+
+        return crop.copy()
+
 
     @staticmethod
     def _to_gray(frame: np.ndarray) -> np.ndarray:

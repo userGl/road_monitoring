@@ -55,7 +55,10 @@ class FramePacket:
     # Треки на текущем кадре (агрегированная информация от трекера)
     tracks: List[Dict[str, Any]] = field(default_factory=list)
 
-    # Информация о motion compensation / global shift
+    # Завершённые треки, готовые к сохранению во внешнее хранилище.
+    lost_tracks: List[Dict[str, Any]] = field(default_factory=list)
+
+    # Информация о глобальном сдвиге / motion compensation.
     motion: Dict[str, Any] = field(default_factory=dict)
 
     annotated_frame: Optional[np.ndarray] = None
