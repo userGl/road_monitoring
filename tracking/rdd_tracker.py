@@ -280,7 +280,7 @@ class RDDTracker:
         bbox: BBox,
         confidence: float,
     ) -> None:
-        if confidence < track.best_confidence:
+        if confidence < track.best_confidence and track.best_bbox is not None:
             return
 
         crop = self._extract_crop(frame, bbox)
