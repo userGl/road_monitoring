@@ -21,6 +21,10 @@ from core import runtime_state
 
 from services.pipeline_builder import build_pipeline
 
+from storage.sqlite_db import create_connection, init_db
+from storage.files import FileStorage
+from storage.repository import TrackResultRepository
+from storage.storage_stage import StorageStage
 
 def run_images_batch_session(
     *,
@@ -61,6 +65,20 @@ def run_images_batch_session(
     yolo_stage = YoloDetectionStage(detector=detector, conf=detector_conf)
     runtime_state.yolo_stage = yolo_stage
 
+    conn = create_connection("data/events.db")
+    init_db(conn)
+
+    file_storage = FileStorage("data")
+    repository = TrackResultRepository(conn)
+
+    run_id = int(__import__("time").time())
+    storage_stage = StorageStage(
+        run_id=run_id,
+        file_storage=file_storage,
+        repository=repository,
+    )
+
+
     # Используем размеры предпросмотра из общего конфига.
     model_input_width = int(get_nested(cfg, "model_input", "width", default=640))
     model_input_height = int(get_nested(cfg, "model_input", "height", default=640))
@@ -72,6 +90,7 @@ def run_images_batch_session(
         model_input_height=model_input_height,
         yolo_stage=yolo_stage,
         draw_enabled=draw_enabled,
+        storage_stage=storage_stage,
     )
     runtime_state.tracker_stage = tracker_stage
 
@@ -133,7 +152,7 @@ def run_images_batch_session(
             else:
                 print(
                     f"[main] Images batch session: nothing to save for frame_id={packet.frame_id} "
-                    "(no frame in packet)"
+                    f"(no frame in packet)"
                 )
 
             detections_json: List[Dict[str, Any]] = []
@@ -180,6 +199,7 @@ def run_images_batch_session(
                     "fps": packet.meta.get("fps"),
                     "detections": detections_json,
                     "tracks": tracks_json,
+                    "storage_saved_events": packet.meta.get("storage_saved_events", []),
                 }
             )
 
@@ -187,6 +207,7 @@ def run_images_batch_session(
 
     finally:
         camera.release()
+        conn.close()
 
     # Фиксируем финальные значения модели и порога с учётом runtime-изменений.
     final_model_path = getattr(runtime_state, "model_path", initial_model_path)
@@ -210,6 +231,7 @@ def run_images_batch_session(
                         final_confidence_threshold
                     ),
                     "frames_processed": processed_frames,
+                    "storage_run_id": run_id,
                 },
                 "frames": results,
             },
