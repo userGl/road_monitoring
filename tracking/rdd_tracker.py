@@ -175,7 +175,6 @@ class RDDTracker:
                             "best_crop_shape": list(track.best_crop_shape) if track.best_crop_shape else None,
                             "last_seen_frame": track.last_seen_frame,
                             "age": track.age,
-                            "position_meters": track.position_meters,
                             "saved_to_storage": track.saved_to_storage,
                             "confirmed": track.confirmed,
                             "is_lost": True,

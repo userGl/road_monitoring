@@ -25,16 +25,16 @@ class StorageStage:
     def __call__(self, packet: FramePacket) -> FramePacket:
         saved_events = []
 
-        print(f"[storage] got {len(packet.lost_tracks)} lost tracks on frame {packet.frame_id}") # отладочная информация
+        # print(f"[storage] got {len(packet.lost_tracks)} lost tracks on frame {packet.frame_id}") # отладочная информация
 
         for event in packet.lost_tracks:
 
-            print(
-            f"[storage] event track_id={event.get('track_id')} " # отладочная информация
-            f"confirmed={event.get('confirmed')} " # отладочная информация
-            f"best_frame_id={event.get('best_frame_id')} " # отладочная информация
-            f"has_crop={event.get('best_crop') is not None}" # отладочная информация
-            )
+            # print(
+            # f"[storage] event track_id={event.get('track_id')} " # отладочная информация
+            # f"confirmed={event.get('confirmed')} " # отладочная информация
+            # f"best_frame_id={event.get('best_frame_id')} " # отладочная информация
+            # f"has_crop={event.get('best_crop') is not None}" # отладочная информация
+            # )
 
             confirmed = bool(event.get("confirmed", False))
             if self.save_only_confirmed and not confirmed:
@@ -71,17 +71,16 @@ class StorageStage:
                 last_seen_frame=int(event.get("last_seen_frame", packet.frame_id)),
                 age=int(event.get("age", 0)),
                 confirmed=confirmed,
-                position_meters=event.get("position_meters"),
                 crop_path=crop_path,
                 crop_width=crop_width,
                 crop_height=crop_height,
             )
             self.repository.save_track_result(record)
             
-            print(            
-            f"[storage] db saved: run_id={record.run_id} " # отладочная информация
-            f"track_id={record.track_id} crop_path={record.crop_path}" # отладочная информация  
-            ) # отладочная информация
+            # print(            
+            # f"[storage] db saved: run_id={record.run_id} " # отладочная информация
+            # f"track_id={record.track_id} crop_path={record.crop_path}" # отладочная информация  
+            # ) # отладочная информация
 
             event["storage_saved"] = True
             event["crop_path"] = crop_path
@@ -93,7 +92,7 @@ class StorageStage:
 
             saved_events.append(event)
         
-        print(f"[storage] saved {len(saved_events)} events") # отладочная информация
+        # print(f"[storage] saved {len(saved_events)} events") # отладочная информация
 
         packet.meta["storage_saved_events"] = saved_events
         return packet

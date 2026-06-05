@@ -20,7 +20,6 @@ class TrackResultRecord:
     last_seen_frame: int
     age: int
     confirmed: bool = True
-    position_meters: Optional[float] = None
     crop_path: Optional[str] = None
     crop_width: Optional[int] = None
     crop_height: Optional[int] = None
@@ -58,12 +57,11 @@ class TrackResultRepository:
                 last_seen_frame,
                 age,
                 confirmed,
-                position_meters,
                 crop_path,
                 crop_width,
                 crop_height
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, track_id) DO UPDATE SET
                 class_id = excluded.class_id,
                 class_name = excluded.class_name,
@@ -80,7 +78,6 @@ class TrackResultRepository:
                 last_seen_frame = excluded.last_seen_frame,
                 age = excluded.age,
                 confirmed = excluded.confirmed,
-                position_meters = excluded.position_meters,
                 crop_path = excluded.crop_path,
                 crop_width = excluded.crop_width,
                 crop_height = excluded.crop_height
@@ -106,7 +103,6 @@ class TrackResultRepository:
                 record.last_seen_frame,
                 record.age,
                 int(record.confirmed),
-                record.position_meters,
                 record.crop_path,
                 record.crop_width,
                 record.crop_height,

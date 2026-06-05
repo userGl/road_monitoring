@@ -64,7 +64,6 @@ class RDDTrack:
     best_crop: Optional[np.ndarray] = None
     best_crop_shape: Optional[Tuple[int, int]] = None
 
-    position_meters: Optional[float] = None
     saved_to_storage: bool = False
 
     predicted_bbox: Optional[BBox] = None

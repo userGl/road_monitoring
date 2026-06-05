@@ -40,7 +40,6 @@ def init_db(conn: sqlite3.Connection) -> None:
             age INTEGER NOT NULL,
             confirmed INTEGER NOT NULL DEFAULT 1,
 
-            position_meters REAL,
             crop_path TEXT,
             crop_width INTEGER,
             crop_height INTEGER,
