@@ -42,11 +42,15 @@ source .venv/bin/activate
 
 ### 3. Установить зависимости
 
+
 ```bash
 ffmpeg -h
 ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
 built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
 ```
+
+Для работы RTSP-потоками необходим MediaMTX, программа установится в Docker контейнер автоматически, проверьте работу Docker
+
 
 ```bash
 $ docker -v
@@ -94,8 +98,10 @@ pip install -r requirements.txt
 
 ### 4. Скачать веса модели
 
-Скачайте файл весов по ссылке:  
-[https://cloud.mail.ru/public/1WAH/jp92kHqw2](https://cloud.mail.ru/public/1WAH/jp92kHqw2)
+Скачайте файл весов ссылка находится в файле:  
+
+`models/download_link.md`
+
 
 Поместите файл в папку `models/`.
 
@@ -104,7 +110,6 @@ pip install -r requirements.txt
 
 ### 5. Запустить через CLI-утилиту
 
-Для работы RTSP-потоками необходим MediaMTX, программа установится Docker контейнер автоматически, проверьте работу Docker
 
 ```bash
 # Linux
