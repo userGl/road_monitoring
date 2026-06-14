@@ -55,3 +55,6 @@ models/*
 
 sensors/ffmpeg_camera_readme.md
 sensors/camera.py
+
+# Результаты работы приложения
+data/* 
