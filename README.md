@@ -19,11 +19,12 @@
 
 ## Быстрый старт
 
-### 1. Клонировать репозиторий
+### 1. Клонировать репозиторий и перейти в ветку vkr
 
 ```bash
 git clone https://github.com/userGl/road_monitoring
 cd road_monitoring
+git checkout vkr
 ```
 
 ### 2. Создать и активировать виртуальное окружение
@@ -41,7 +42,51 @@ source .venv/bin/activate
 
 ### 3. Установить зависимости
 
-Сначала установите PyTorch с нужной версией CUDA (см. [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)), затем:
+```bash
+ffmpeg -h
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+```
+
+```bash
+$ docker -v
+Docker version 29.4.0, build 9d7ad9f
+```
+
+Сначала установите PyTorch с нужной версией CUDA (см. [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/)), например:
+
+```bash
+$ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
+Проверка:
+
+```bash
+$ nvidia-smi
+Sun Jun 14 15:28:57 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.159.03             Driver Version: 580.159.03     CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...    Off |   00000000:01:00.0 Off |                  N/A |
+| N/A   43C    P0             15W /  115W |      15MiB /   8188MiB |      9%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            2056      G   /usr/lib/xorg/Xorg                        4MiB |
++-----------------------------------------------------------------------------------------+
+
+```
+
+Затем установите зависимости:
 
 ```bash
 pip install -r requirements.txt
@@ -54,10 +99,15 @@ pip install -r requirements.txt
 
 Поместите файл в папку `models/`.
 
+Скачайте видеофайл, ссылка находится в файле: `test_videos/download_link.md` и поместите в папку  `test_videos/`
+
+
 ### 5. Запустить через CLI-утилиту
 
+Для работы RTSP-потоками необходим MediaMTX, программа установится Docker контейнер автоматически, проверьте работу Docker
+
 ```bash
-# Linux / macOS
+# Linux
 bash scripts/01_manage.sh
 
 # Windows (PowerShell)
@@ -67,6 +117,7 @@ bash scripts/01_manage.sh
 Скрипт автоматически активирует виртуальное окружение и открывает интерактивное меню управления.
 
 **Типичная последовательность в меню:**
+
 1. `1) Управление процессами` → `1) Запустить симуляцию видеокамеры` — запускает MediaMTX RTSP-сервер с тестовым видео
 2. `1) Управление процессами` → `2) Запустить приложение` — запускает `main.py` в отдельном окне терминала
 3. `2) Режим приложения` → `2) Включить режим rtsp` — переключает приложение в рабочий режим
@@ -90,11 +141,13 @@ python main.py
 
 Переключаются через REST API или CLI-утилиту:
 
+
 | Режим         | Описание                                                  |
-|---------------|-----------------------------------------------------------|
+| ------------- | --------------------------------------------------------- |
 | `rtsp`        | Непрерывная обработка входящего RTSP-видеопотока          |
 | `test_images` | Однократная пакетная обработка директории с изображениями |
 | `idle`        | Ожидание команды, обработка приостановлена                |
+
 
 ---
 
@@ -246,6 +299,7 @@ road_monitoring/
 Одиночная детекция по base64-изображению.
 
 **Запрос:**
+
 ```json
 {
   "image": "<base64-строка JPEG/PNG>",
@@ -254,6 +308,7 @@ road_monitoring/
 ```
 
 **Ответ:**
+
 ```json
 {
   "success": true,
@@ -326,6 +381,7 @@ CLI (manage.py)
 ## Ручная отладка через Jupyter
 
 Ноутбук `manual_test.ipynb` позволяет:
+
 - загрузить изображение из `test_images/`
 - отправить POST-запрос на `/api/v1/test/detect`
 - визуализировать детекции поверх изображения
@@ -346,13 +402,15 @@ API_URL = "http://localhost:8081/api/v1/test/detect"
 
 Параметры по умолчанию задаются в `config.yaml`:
 
-| Параметр                        | Значение по умолчанию            | Описание                          |
-|---------------------------------|----------------------------------|-----------------------------------|
-| `stream.input_rtsp_url`         | `rtsp://127.0.0.1:8554/live`     | Адрес входного RTSP-потока        |
-| `stream.output_rtsp_url`        | `rtsp://127.0.0.1:8554/preview`  | Адрес выходного RTSP-потока       |
-| `stream.enable_output_stream`   | `false`                          | Включить выходную трансляцию      |
-| `detector.model_path`           | `models/YOLOv8_Small_RDD.pt`     | Путь к весам модели               |
-| `detector.confidence_threshold` | `0.05`                           | Порог уверенности детектора       |
+
+| Параметр                        | Значение по умолчанию           | Описание                     |
+| ------------------------------- | ------------------------------- | ---------------------------- |
+| `stream.input_rtsp_url`         | `rtsp://127.0.0.1:8554/live`    | Адрес входного RTSP-потока   |
+| `stream.output_rtsp_url`        | `rtsp://127.0.0.1:8554/preview` | Адрес выходного RTSP-потока  |
+| `stream.enable_output_stream`   | `false`                         | Включить выходную трансляцию |
+| `detector.model_path`           | `models/YOLOv8_Small_RDD.pt`    | Путь к весам модели          |
+| `detector.confidence_threshold` | `0.05`                          | Порог уверенности детектора  |
+
 
 Параметры могут быть изменены через REST API во время работы без перезапуска.
 
@@ -373,6 +431,7 @@ API_URL = "http://localhost:8081/api/v1/test/detect"
 Ноутбуки обучения находятся в папке `training/`. Для работы прототипа не требуются.
 
 Краткие результаты экспериментов:
+
 - На полном датасете RDD (Czech, India, Japan, Norway, US): средний Recall ≈ 0,60, Precision ≈ 0,68–0,69
 - На подвыборке Japan (100 эпох, YOLOv8s): Recall ≥ 94%, Precision ≥ 95%
 

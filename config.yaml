@@ -3,7 +3,7 @@
 # Конфигурация тестового входного RTSP потока
 # Эти настройки используются скриптами публикации тестового видео
 vlc:
-  video: test_videos/car_3.mkv
+  video: test_videos/check1.mkv
   rtsp_port: 8554
   rtsp_path: live
 
@@ -21,5 +21,5 @@ model_input:
   height: 640
 
 detector:
-  model_path: models/YOLOv8_Small_RDD.pt
+  model_path: models/yolov8s_japan_best.pt
   confidence_threshold: 0.05
