@@ -1,5 +1,5 @@
 ﻿# start_mediamtx_rtsp.ps1
-#  для запуска mediamtx в Docker и публикации RTSP потока
+# для запуска mediamtx в Docker и публикации RTSP потока
 # необходимы docker и ffmpeg в PATH
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +20,6 @@ if (-not (Test-Path $ConfigPath)) {
 
 # --- Чтение config.yaml ---
 
-# Поиск строки с video:
 $videoLine = Select-String -Path $ConfigPath -Pattern '^[\s]*video:' -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
@@ -29,12 +28,10 @@ if (-not $videoLine) {
     exit 1
 }
 
-# Извлечение значения после ':' и удаление кавычек/пробелов
 $videoRel = $videoLine.Line -replace '^[^:]+:\s*', '' -replace '"', '' -replace '''', ''
 $videoRel = $videoRel.Trim()
 
-# rtsp_port (если нет — по умолчанию 8554)
-$rtspPortLine = Select-String -Path $ConfigPath -Pattern '^[\s]*rtsp_port:' -SimpleMatch -ErrorAction SilentlyContinue |
+$rtspPortLine = Select-String -Path $ConfigPath -Pattern '^[\s]*rtsp_port:' -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
 if ($rtspPortLine) {
@@ -44,8 +41,7 @@ if ($rtspPortLine) {
     $rtspPort = '8554'
 }
 
-# rtsp_path (если нет — по умолчанию live)
-$rtspPathLine = Select-String -Path $ConfigPath -Pattern '^[\s]*rtsp_path:' -SimpleMatch -ErrorAction SilentlyContinue |
+$rtspPathLine = Select-String -Path $ConfigPath -Pattern '^[\s]*rtsp_path:' -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
 if ($rtspPathLine) {
@@ -80,26 +76,38 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
+function Test-DockerAvailable {
+    & docker info | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+# --- Проверка, что Docker доступен ---
+
+if (-not (Test-DockerAvailable)) {
+    Write-Host "Запустите Docker Desktop и повторите попытку" -ForegroundColor Yellow
+    exit 0
+}
+
 # --- Обработчик выхода ---
 
 function Cleanup {
     Write-Host ""
     Write-Host "Stopping streamer..."
     try {
-        docker stop mediamtx | Out-Null
+        if (Test-DockerAvailable) {
+            docker stop mediamtx 2>$null | Out-Null
+        }
     } catch {
         # игнорируем
     }
 }
 
-# Регистрация обработчика на выход
-$null = Register-EngineEvent PowerShell.Exiting -Action { Cleanup }
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action { Cleanup }
 
 # --- Запуск MediaMTX в Docker ---
 
 $rtspUrl = "rtsp://127.0.0.1:$rtspPort/$rtspPath"
 
-# Проверка, запущен ли уже контейнер mediamtx
 $mediamtxRunning = docker ps --format '{{.Names}}' 2>$null | Where-Object { $_ -eq 'mediamtx' }
 
 if ($mediamtxRunning) {
@@ -124,19 +132,6 @@ Start-Sleep -Seconds 2
 Write-Host "Publishing file: $videoPath"
 Write-Host "RTSP URL: $rtspUrl"
 
-# --- Запуск ffmpeg для публикации RTSP со звуком ---
-
-# ffmpeg `
-#     -loglevel info `
-#     -re `
-#     -stream_loop -1 `
-#     -i "$videoPath" `
-#     -rtsp_transport tcp `
-#     -c copy `
-#     -f rtsp `
-#     "$rtspUrl"
-
-# --- Запуск ffmpeg для публикации RTSP без звука ---
 ffmpeg `
     -loglevel info `
     -re `
