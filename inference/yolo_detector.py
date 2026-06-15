@@ -37,6 +37,7 @@ class YoloDetector:
             return
         logger.info(f"Загрузка модели: {self.model_path}")
         self.model = YOLO(self.model_path)
+        self.model.to(self.device)
         logger.info(f"Модель успешно загружена. Устройство: {self.device}")
 
     def is_ready(self) -> bool:
@@ -77,7 +78,6 @@ class YoloDetector:
         results = self.model(
             image_bgr,
             conf=confidence_threshold,
-            device=self.device,
             verbose=False,
         )
 
