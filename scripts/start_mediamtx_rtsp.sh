@@ -38,13 +38,6 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   exit 1
 fi
 
-cleanup() {
-  echo
-  echo "Stopping streamer..."
-  docker stop mediamtx >/dev/null 2>&1 || true
-}
-trap cleanup EXIT INT TERM
-
 if docker ps --format '{{.Names}}' | grep -qx 'mediamtx'; then
   echo "MediaMTX is already running in Docker"
 else
@@ -58,11 +51,6 @@ sleep 2
 echo "Publishing file: $video_path"
 echo "RTSP URL: rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
 
-# --- Запуск ffmpeg для публикации RTSP со звуком ---
-# ffmpeg -re -stream_loop -1 -i "$video_path" \
-#   -c copy -f rtsp "rtsp://127.0.0.1:${rtsp_port}/${rtsp_path}"
-
-# --- Запуск ffmpeg для публикации RTSP без звука ---
 ffmpeg -re -stream_loop -1 -i "$video_path" \
   -an \
   -c:v copy \

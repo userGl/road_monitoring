@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import signal
 import subprocess
@@ -6,7 +8,7 @@ from pathlib import Path
 from shutil import which
 from typing import Optional
 
-from .paths import APP_DIR, IS_WINDOWS, RUN_DIR
+from .config import APP_DIR, IS_WINDOWS, RUN_DIR
 
 
 def ensure_run_dir() -> None:
@@ -23,7 +25,7 @@ def read_pid_file(pid_file: Path) -> Optional[int]:
         return None
     try:
         return int(pid_file.read_text(encoding="utf-8").strip())
-    except (ValueError, OSError):
+    except (OSError, ValueError):
         return None
 
 
@@ -75,16 +77,14 @@ def is_pid_running(pid: int) -> bool:
     return True
 
 
-def is_managed_process_running(pid_file: Path) -> bool:
+def process_status(pid_file: Path) -> tuple[bool, Optional[int]]:
     pid = read_pid_file(pid_file)
     if pid is None:
-        return False
-
+        return False, None
     if is_pid_running(pid):
-        return True
-
+        return True, pid
     remove_pid_file(pid_file)
-    return False
+    return False, None
 
 
 def stop_process_by_pid(pid: int) -> bool:
@@ -153,9 +153,8 @@ def wait_for_pid_file(pid_file: Path, timeout: float = 5.0) -> Optional[int]:
 
 
 def _build_linux_terminal_command(command: str, pid_file: Path) -> str:
-    pid_file_str = str(pid_file)
     return (
-        f'echo $$ > "{pid_file_str}"; '
+        f'echo $$ > "{pid_file}"; '
         f'{command}; '
         f'echo; '
         f'read -n 1 -s -r -p \'Нажми любую клавишу для закрытия...\''
@@ -170,6 +169,7 @@ def open_process_in_new_terminal_linux(
 ) -> Optional[subprocess.Popen]:
     working_dir = str(cwd or APP_DIR)
     full_cmd = command
+
     if pid_file is not None:
         ensure_run_dir()
         remove_pid_file(pid_file)
@@ -191,8 +191,10 @@ def open_process_in_new_terminal_linux(
         return subprocess.Popen([
             "x-terminal-emulator",
             "-e",
-            f'bash -lc \'{full_cmd}\'',
-        ], cwd=working_dir, shell=False)
+            "bash",
+            "-lc",
+            full_cmd,
+        ], cwd=working_dir)
 
     if which("xterm"):
         return subprocess.Popen([
@@ -216,3 +218,44 @@ def open_process_in_new_terminal_windows(args: list[str]) -> Optional[subprocess
     cmd = [ps_exe, "-NoExit", "-ExecutionPolicy", "Bypass", *args]
     creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
     return subprocess.Popen(cmd, cwd=str(APP_DIR), creationflags=creationflags)
+
+
+def start_terminal_process(
+    *,
+    title: str,
+    command: str,
+    pid_file: Path,
+    display_name: str,
+    windows_args: list[str],
+    cwd: Optional[Path] = None,
+) -> None:
+    running, pid = process_status(pid_file)
+    if running:
+        print(f"{display_name} уже запущен (PID {pid}).")
+        return
+
+    if IS_WINDOWS:
+        proc = open_process_in_new_terminal_windows(windows_args)
+        if proc is None:
+            print("Не найден PowerShell (pwsh/powershell) для запуска нового окна.")
+            return
+        write_pid_file(pid_file, proc.pid)
+        print(f"{display_name} запущен (PID {proc.pid}).")
+        return
+
+    proc = open_process_in_new_terminal_linux(
+        title=title,
+        command=command,
+        pid_file=pid_file,
+        cwd=cwd,
+    )
+    if proc is None:
+        print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
+        return
+
+    real_pid = wait_for_pid_file(pid_file, timeout=5.0)
+    if real_pid is None:
+        print(f"Не удалось получить PID процесса: {display_name}.")
+        return
+
+    print(f"{display_name} запущен (PID {real_pid}).")

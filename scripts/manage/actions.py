@@ -20,6 +20,7 @@ from .runtime import (
     open_process_in_new_terminal_windows,
     read_pid_file,
     stop_managed_process,
+    wait_for_pid_file,
     write_pid_file,
 )
 
@@ -262,14 +263,26 @@ def start_rtsp_publisher() -> None:
         if proc is None:
             print("Не найден PowerShell (pwsh/powershell) для запуска нового окна.")
             return
-    else:
-        proc = open_process_in_new_terminal_linux("RTSP Publisher", f'"{START_RTSP_SCRIPT}"')
-        if proc is None:
-            print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
-            return
+        write_pid_file(RTSP_PUBLISHER_PID_FILE, proc.pid)
+        print(f"Симуляция видеокамеры запущена (PID {proc.pid}).")
+        return
 
-    write_pid_file(RTSP_PUBLISHER_PID_FILE, proc.pid)
-    print(f"Симуляция видеокамеры запущена (PID {proc.pid}).")
+    proc = open_process_in_new_terminal_linux(
+        title="RTSP Publisher",
+        command=f'"{START_RTSP_SCRIPT}"',
+        pid_file=RTSP_PUBLISHER_PID_FILE,
+        cwd=APP_DIR,
+    )
+    if proc is None:
+        print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
+        return
+
+    real_pid = wait_for_pid_file(RTSP_PUBLISHER_PID_FILE, timeout=5.0)
+    if real_pid is None:
+        print("Не удалось получить PID процесса симуляции из нового терминала.")
+        return
+
+    print(f"Симуляция видеокамеры запущена (PID {real_pid}).")
 
 
 def start_rtsp_viewer() -> None:
@@ -283,7 +296,11 @@ def start_rtsp_viewer() -> None:
             print("Не найден PowerShell (pwsh/powershell) для запуска нового окна.")
         return
 
-    proc = open_process_in_new_terminal_linux("RTSP Viewer", f'"{VIEW_RTSP_SCRIPT}"')
+    proc = open_process_in_new_terminal_linux(
+        title="RTSP Viewer",
+        command=f'"{VIEW_RTSP_SCRIPT}"',
+        cwd=APP_DIR,
+    )
     if proc is None:
         print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
 
@@ -311,15 +328,26 @@ def start_main_app() -> None:
         if proc is None:
             print("Не найден PowerShell (pwsh/powershell) для запуска нового окна.")
             return
-    else:
-        command = f'cd "{APP_DIR}" && "{python_exe}" "{APP_ENTRY}"'
-        proc = open_process_in_new_terminal_linux("Main App", command)
-        if proc is None:
-            print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
-            return
+        write_pid_file(MAIN_APP_PID_FILE, proc.pid)
+        print(f"Приложение запущено (PID {proc.pid}).")
+        return
 
-    write_pid_file(MAIN_APP_PID_FILE, proc.pid)
-    print(f"Приложение запущено (PID {proc.pid}).")
+    proc = open_process_in_new_terminal_linux(
+        title="Main App",
+        command=f'"{python_exe}" "{APP_ENTRY}"',
+        pid_file=MAIN_APP_PID_FILE,
+        cwd=APP_DIR,
+    )
+    if proc is None:
+        print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
+        return
+
+    real_pid = wait_for_pid_file(MAIN_APP_PID_FILE, timeout=5.0)
+    if real_pid is None:
+        print("Не удалось получить PID процесса приложения из нового терминала.")
+        return
+
+    print(f"Приложение запущено (PID {real_pid}).")
 
 
 def stop_rtsp_publisher() -> None:
