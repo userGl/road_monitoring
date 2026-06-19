@@ -1,25 +1,25 @@
-# Конфигурация сервиса
 
-# Конфигурация тестового входного RTSP потока
-# Эти настройки используются скриптами публикации тестового видео
-vlc:
-  video: test_videos/check1.mkv
-  rtsp_port: 8554
-  rtsp_path: live
-
-# Настройки Python-сервиса обработки видео
+# Настройки  прототипа
 stream:
+# Входной RTSP-поток
   input_rtsp_url: "rtsp://127.0.0.1:8554/live"
+# Выходной RTSP-поток
   output_rtsp_url: "rtsp://127.0.0.1:8554/preview"
-  enable_output_stream: false
+# Включить выходную трансляцию
+  enable_output_stream: true
 
 camera:
+# Использовать HW-ускорение для декодирования видео
   use_hwaccel: true
 
 model_input:
+# Ширина входного кадра
   width: 640
+# Высота входного кадра
   height: 640
 
 detector:
+# Путь к модели YOLO
   model_path: models/yolov8s_japan_best.pt
+# Порог уверенности для детекции
   confidence_threshold: 0.05
