@@ -3,27 +3,10 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 
 from . import api_client
-from .config import (
-    APP_DIR,
-    APP_ENTRY,
-    IS_WINDOWS,
-    MAIN_APP_PID_FILE,
-    MODELS_DIR,
-    RTSP_PUBLISHER_PID_FILE,
-    START_RTSP_SCRIPT,
-    TEST_IMAGES_ROOT,
-    VIEW_RTSP_SCRIPT,
-)
-from .processes import (
-    get_venv_python,
-    open_process_in_new_terminal_linux,
-    open_process_in_new_terminal_windows,
-    process_status,
-    start_terminal_process,
-    stop_managed_process,
-)
+from .config import MODELS_DIR, TEST_IMAGES_ROOT
 
 
 def pretty_json(data: dict) -> None:
@@ -34,102 +17,33 @@ def pause() -> None:
     input("\nEnter для продолжения...")
 
 
-def show_status_lines() -> None:
-    rtsp_running, rtsp_pid = process_status(RTSP_PUBLISHER_PID_FILE)
-    app_running, app_pid = process_status(MAIN_APP_PID_FILE)
-
-    rtsp_text = f"RUNNING (PID {rtsp_pid})" if rtsp_running else "STOPPED"
-    app_text = f"RUNNING (PID {app_pid})" if app_running else "STOPPED"
-
-    print("Статус:")
-    print(f"- Симуляция камеры: {rtsp_text}")
-    print(f"- MVP-приложение:   {app_text}")
-
 def show_menu() -> None:
     print("\n================ ROAD MONITORING ================")
-    show_status_lines()
-    print()
-    print("Основные действия:")
-    print("1) Запустить симуляцию камеры")
-    print("2) Запустить MVP-приложение")
-    print("3) Открыть просмотр RTSP-видеопотока")
-    print("4) Остановить симуляцию камеры")
-    print("5) Остановить MVP-приложение")
-    print()
     print("Управление MVP:")
-    print("6) Выбрать модель детектора")
-    print("7) Изменить порог уверенности детектора")
-    print("8) Включить/выключить выходной видеопоток MVP")
-    print("9) Переключить режим приложения: RTSP/IDLE")
-    print("10) Показать текущую конфигурацию")
+    print("1) Выбрать модель детектора")
+    print("2) Изменить порог уверенности детектора")
+    print("3) Включить/выключить выходной видеопоток MVP")
+    print("4) Переключить режим приложения: RTSP/IDLE")
+    print("5) Показать текущую конфигурацию")
     print()
     print("Тесты:")
-    print("11) Batch-обработка изображений")
+    print("6) Batch-обработка изображений")
     print()
     print("0) Выход")
     print("=================================================")
 
-def start_rtsp() -> None:
-    if not START_RTSP_SCRIPT.is_file():
-        print(f"Скрипт не найден: {START_RTSP_SCRIPT}")
-        return
 
-    start_terminal_process(
-        title="RTSP Publisher",
-        command=f'"{START_RTSP_SCRIPT}"',
-        pid_file=RTSP_PUBLISHER_PID_FILE,
-        display_name="Симуляция видеокамеры",
-        windows_args=["-File", str(START_RTSP_SCRIPT)],
-        cwd=APP_DIR,
-    )
-
-
-def stop_rtsp() -> None:
-    stop_managed_process(RTSP_PUBLISHER_PID_FILE, "Симуляция видеокамеры")
-
-
-def start_app() -> None:
-    if not APP_ENTRY.is_file():
-        print(f"Файл приложения не найден: {APP_ENTRY}")
-        return
-
-    python_exe = get_venv_python()
-    if not python_exe.is_file():
-        print(f"Python в venv не найден: {python_exe}")
-        return
-
-    start_terminal_process(
-        title="Main App",
-        command=f'"{python_exe}" "{APP_ENTRY}"',
-        pid_file=MAIN_APP_PID_FILE,
-        display_name="Приложение",
-        windows_args=["-Command", f'& "{python_exe}" "{APP_ENTRY}"'],
-        cwd=APP_DIR,
-    )
-
-
-def stop_app() -> None:
-    stop_managed_process(MAIN_APP_PID_FILE, "Приложение")
-
-
-def open_viewer() -> None:
-    if not VIEW_RTSP_SCRIPT.is_file():
-        print(f"Скрипт не найден: {VIEW_RTSP_SCRIPT}")
-        return
-
-    if IS_WINDOWS:
-        proc = open_process_in_new_terminal_windows(["-File", str(VIEW_RTSP_SCRIPT)])
-        if proc is None:
-            print("Не найден PowerShell (pwsh/powershell) для запуска нового окна.")
-        return
-
-    proc = open_process_in_new_terminal_linux(
-        title="RTSP Viewer",
-        command=f'"{VIEW_RTSP_SCRIPT}"',
-        cwd=APP_DIR,
-    )
-    if proc is None:
-        print("Не найден терминал для запуска нового окна (gnome-terminal/x-terminal-emulator/xterm)")
+def with_api(handler: Callable[[], None]) -> None:
+    """Выполнить команду, которая использует API, с дружелюбной обработкой ошибок."""
+    try:
+        handler()
+    except RuntimeError as e:
+        msg = str(e)
+        if "Ошибка соединения" in msg:
+            print("MVP-приложение не запущено или недоступно. Команда не выполнена.")
+        else:
+            print(f"Ошибка при обращении к API: {msg}")
+        pause()
 
 
 def toggle_stream() -> None:
@@ -200,6 +114,7 @@ def choose_model() -> None:
     rel_path = f"models/{selected.name}"
     resp = api_client.patch_config({"detector": {"model_path": rel_path}})
     pretty_json(resp)
+
 
 def switch_video_mode() -> None:
     print()
@@ -296,17 +211,12 @@ def run_batch() -> None:
 
 def run_cli() -> None:
     actions = {
-        "1": start_rtsp,
-        "2": start_app,
-        "3": open_viewer,
-        "4": stop_rtsp,
-        "5": stop_app,
-        "6": choose_model,
-        "7": change_confidence,
-        "8": toggle_stream,
-        "9": switch_video_mode,
-        "10": show_config,
-        "11": run_batch,
+        "1": lambda: with_api(choose_model),
+        "2": lambda: with_api(change_confidence),
+        "3": lambda: with_api(toggle_stream),
+        "4": lambda: with_api(switch_video_mode),
+        "5": lambda: with_api(show_config),
+        "6": lambda: with_api(run_batch),
     }
 
     while True:
@@ -323,12 +233,4 @@ def run_cli() -> None:
             pause()
             continue
 
-        try:
-            action()
-        except Exception as e:
-            print(f"Ошибка: {e}")
-            pause()
-            continue
-
-        if choice == "10":
-            pause()
+        action()

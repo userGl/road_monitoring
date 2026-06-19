@@ -1,4 +1,4 @@
-from .cli import run_cli
+from scripts2.cli.cli import run_cli
 
 
 if __name__ == "__main__":
