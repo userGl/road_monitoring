@@ -106,20 +106,16 @@ road_monitoring/
 ---
 
 
-## Диаграмма компонентов
+## Диаграмма компонентов  
 
-
-_Раздел в работе._
-
+![Диаграмма компонентов](demo/components_diagram.drawio.svg)
 
 ---
 
 
-## Диаграмма последовательностей
+## Диаграмма последовательности режим RTSP 
 
-
-_Раздел в работе._
-
+![Диаграмма последовательности](demo/sequence3.svg)
 
 ---
 
@@ -367,30 +363,7 @@ python main.py
 [Запуск MVP Linux](demo/start_mvp.gif)
 
 
-### 8 Управление прототипом через CLI
-
-
-CLI-утилита (`scripts2/cli/`) позволяет управлять параметрами прототипа «на лету»: сменой модели, порога уверенности модели, режима работы, запуском тестовой пакетной обработки изображений.
-
-
-Для запуска CLI-утилиты в зависимости от операционной системы запустите `02_cli.sh` или `02_cli.ps1` аналогично пунктам 7.1.1 или 7.1.2. Утилиту можно запустить также из активированного виртуального окружения проекта:
-
-
-```bash
-python -m scripts2.cli.main
-```
-
-
-При запуске утилита считывает настройки IP/порта API, хранящиеся в `scripts2/scripts_config.yaml`, и управляет работой прототипа по протоколу REST API. Также утилита считывает содержимое папок `models/` и `test_images/` и выводит список доступных моделей и директорий с тестовыми изображениями. При недоступности REST API утилита выводит сообщение «MVP-приложение не запущено или недоступно» и возвращается в меню, не завершая работу.
-
-
-Подробнее о структуре меню см. раздел [CLI-утилита](#cli-утилита) ниже.
-
-
----
-
-
-## Режимы работы
+## Режимы работы MVP
 
 
 Переключаются через REST API или CLI-утилиту:
@@ -613,9 +586,20 @@ curl -X POST "http://localhost:8081/api/v1/test/detect" \
 
 ## CLI-утилита
 
+Для упрощения взаимодействия с прототипом разработана CLI-утилита — интерактивное текстовое меню. Утилита реализует клиентскую часть взаимодействия по эндпойнтам, описанным в разделе REST API: отправляет HTTP-запросы к прототипу, разбирает ответы и отображает результат пользователю
 
-Для упрощения взаимодействия с прототипом разработана CLI-утилита — интерактивное текстовое меню. Утилита реализует клиентскую часть взаимодействия по эндпойнтам, описанным в разделе REST API: отправляет HTTP-запросы к прототипу, разбирает ответы и отображает результат пользователю.
+CLI-утилита (`scripts2/cli/`) позволяет управлять параметрами прототипа «на лету»: сменой модели, порога уверенности модели, режима работы, запуском тестовой пакетной обработки изображений.  
 
+
+Для запуска CLI-утилиты в зависимости от операционной системы запустите `02_cli.sh` или `02_cli.ps1` аналогично пунктам 7.1.1 или 7.1.2. Утилиту можно запустить также из активированного виртуального окружения проекта:
+
+```bash
+python -m scripts2.cli.main
+```
+
+При запуске утилита считывает настройки IP/порта API, хранящиеся в `scripts2/scripts_config.yaml`, и управляет работой прототипа по протоколу REST API. Также утилита считывает содержимое папок `models/` и `test_images/` и выводит список доступных dtcjd моделей и директорий с тестовыми изображениями. При недоступности REST API утилита выводит сообщение «MVP-приложение не запущено или недоступно» и возвращается в меню, не завершая работу.  
+
+### Cтруктура меню
 
 ```
 CLI (scripts2.cli.main)
@@ -623,7 +607,7 @@ CLI (scripts2.cli.main)
 └── Главное меню
     │
     ├── Управление MVP:
-    │   ├── 1) Выбрать модель детектора        → PATCH /api/v1/config
+    │   ├── 1) Выбрать файл весов модели ИНС   → PATCH /api/v1/config
     │   ├── 2) Изменить порог уверенности      → PATCH /api/v1/config
     │   ├── 3) Вкл/выкл выходной видеопоток    → PATCH /api/v1/config
     │   ├── 4) Переключить режим RTSP / IDLE   → POST  /api/v1/control
@@ -634,13 +618,103 @@ CLI (scripts2.cli.main)
     │
     └── 0) Выход
 ```
+### Демонстрация работы CLI  
 
+<video src="demo/cli.mp4" controls width="1280"></video>
 
 ---
 
+## Хранилище данных
+
+Прототип сохраняет два вида артефактов: метаданные подтверждённых треков (SQLite) и кропы — фрагменты исходного кадра с дефектом (файловая система). За запись отвечает стадия конвейера `StorageStage`, которая получает на вход `FramePacket` с полем `lost_tracks` (треки, завершившие жизнь в трекере) и сохраняет только те из них, у которых `confirmed=True`.
+
+### Местоположение данных
+
+| Артефакт | Путь | Описание |
+| --- | --- | --- |
+| База данных | `data/events.db` | Метаданные всех сохранённых треков |
+| Кропы | `data/crops/run_<run_id>/track_<track_id>_frame_<frame_id>.jpg` | Изображения «лучшего» кадра трека |
+
+Имя файла БД задано в `services/rtsp_session.py` и `services/images_batch.py`. Папка с кропами создаётся автоматически при первой записи.
+
+### Идентификатор запуска `run_id`
+
+Каждая сессия обработки получает уникальный `run_id`. В текущей реализации в качестве идентификатора используется Unix-timestamp момента старта (`int(time.time())`). Один `run_id` соответствует:
+
+- одной непрерывной RTSP-сессии (от перехода в режим `rtsp` до выхода в `idle`)
+- одному вызову пакетной обработки `POST /api/v1/test/images`
+
+Это позволяет отделять результаты разных запусков друг от друга в общей БД и в файловой структуре `data/crops/run_<run_id>/`.
+
+### Схема таблицы `track_results`
+
+Все подтверждённые треки сохраняются в одну таблицу. Уникальность гарантируется парой `(run_id, track_id)` — при повторной записи того же трека выполняется `UPDATE` через `ON CONFLICT`.
+
+| Колонка | Тип | Описание |
+| --- | --- | --- |
+| `id` | INTEGER PK | Автоинкрементный первичный ключ |
+| `run_id` | INTEGER | Идентификатор запуска |
+| `track_id` | INTEGER | Идентификатор трека внутри запуска |
+| `class_id` | INTEGER | Числовой идентификатор класса дефекта |
+| `class_name` | TEXT | Имя класса дефекта (например, «D10») |
+| `last_bbox_x1/y1/x2/y2` | REAL | Координаты последней наблюдённой рамки |
+| `best_bbox_x1/y1/x2/y2` | REAL nullable | Координаты «лучшего» кадра трека (максимальная уверенность) |
+| `best_confidence` | REAL | Максимальная уверенность детектора в треке |
+| `best_frame_id` | INTEGER nullable | Номер кадра, на котором достигнут максимум уверенности |
+| `last_seen_frame` | INTEGER | Номер последнего кадра, где трек наблюдался |
+| `age` | INTEGER | Возраст трека (число кадров жизни) |
+| `confirmed` | INTEGER | Подтверждение трека (0/1) |
+| `crop_path` | TEXT nullable | Относительный путь к файлу кропа от `data/` |
+| `crop_width`, `crop_height` | INTEGER nullable | Размеры сохранённого кропа в пикселях |
+| `created_at` | DATETIME | Время вставки записи |
+
+Индексы:
+
+- `idx_track_results_run_track` — на пару `(run_id, track_id)`
+- `idx_track_results_class_name` — на `class_name` (быстрая выборка по типу дефекта)
+
+### Просмотр содержимого БД
+
+База соответствует обычному файлу SQLite — открывается любой совместимой утилитой без запущенного прототипа.
+
+Командная строка:
+
+```bash
+sqlite3 data/events.db ".schema track_results"
+sqlite3 data/events.db "SELECT run_id, COUNT(*) FROM track_results GROUP BY run_id;"
+sqlite3 data/events.db "SELECT track_id, class_name, best_confidence, crop_path \
+                       FROM track_results WHERE run_id = <RUN_ID> ORDER BY best_confidence DESC LIMIT 20;"
+```
+
+GUI-утилиты: [DB Browser for SQLite](https://sqlitebrowser.org/), [DBeaver](https://dbeaver.io/), плагин SQLite Viewer для VS Code.
+
+Python:
+
+```python
+import sqlite3
+conn = sqlite3.connect("data/events.db")
+conn.row_factory = sqlite3.Row
+for row in conn.execute("SELECT * FROM track_results WHERE class_name = ? LIMIT 5", ("D10",)):
+    print(dict(row))
+```
+
+### Связь записи и кропа
+
+В колонке `crop_path` хранится путь относительно директории `data/`. Чтобы получить абсолютный путь к файлу-кропу, объедините `data/` и значение `crop_path`. В коде это делает `FileStorage.build_absolute_path(relative_path)`.
+
+Пример: запись с `crop_path = "crops/run_001714550400/track_000017_frame_001234.jpg"` соответствует файлу `data/crops/run_001714550400/track_000017_frame_001234.jpg`.
+
+### Сброс данных
+
+База инициализируется через `CREATE TABLE IF NOT EXISTS`, поэтому при повторных запусках накопленные данные сохраняются. Для полной очистки удалите файл базы и папку кропов:
+
+```bash
+rm -rf data/events.db data/crops/
+```
+
+При следующем запуске прототип создаст пустую базу и пустую директорию кропов автоматически.
 
 ## Конфигурация
-
 
 ### config.yaml — параметры прототипа
 
@@ -674,139 +748,3 @@ CLI (scripts2.cli.main)
 
 
 ---
-
-
-## Ручная отладка через Jupyter
-
-
-Ноутбук `manual_test.ipynb` позволяет:
-
-
-- загрузить изображение из `test_images/`
-- отправить POST-запрос на `/api/v1/test/detect`
-- визуализировать детекции поверх изображения
-
-
-```bash
-jupyter lab
-```
-
-
-Убедитесь, что в ноутбуке указан правильный адрес:
-
-
-```python
-API_URL = "http://localhost:8081/api/v1/test/detect"
-```
-```mermaid
-flowchart LR
-    classDef default fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
-
-    subgraph Workstation["Рабочая станция"]
-        CLI["HTTP-клиент<br>CLI / curl / Swagger"]
-        RTSPSim["Симулятор RTSP-потока<br>FFmpeg (loopback)"]
-        Player["Просмотр результатов<br>Медиаплеер"]
-
-        subgraph App["MVP сервиса детекции дефектов дорожного полотна — road_monitoring"]
-            RTSP["FFmpegRTSPCamera<br>FFmpeg + OpenCV"]
-            ImgFolder["ImageFolderCamera<br>cv2.imread"]
-            TestImages["Папка с тестовыми<br>изображениями (test_images/)"]
-
-            Preproc["PreprocessStage<br>cv2.resize (640×640)"]
-            YOLO["YoloDetectionStage<br>YoloDetector, ultralytics, PyTorch"]
-            Tracker["RDDTrackerStage<br>RDDTracker"]
-            Storage["StorageStage<br>Repository, FileStorage, SQLite"]
-            Draw["DrawDetectionsStage<br>cv2.rectangle, cv2.putText"]
-            Streamer["RtspStreamer<br>FFmpeg"]
-
-            DB[("SQLite<br>data/events.db")]
-            Files[("Файловое хранилище<br>data/crops/")]
-
-            API["REST API<br>FastAPI :8081"]
-            RC["runtime_config<br>рабочие параметры сервиса"]
-        end
-    end
-
-    %% Источники кадров — создание FramePacket
-    RTSPSim -->|RTSP H.264 loopback| RTSP
-    TestImages -->|jpg/png| ImgFolder
-
-    %% Конвейер — один FramePacket, поля накапливаются
-    RTSP -->|FramePacket<br>frame, timestamps| Preproc
-    ImgFolder -->|FramePacket<br>frame, timestamps| Preproc
-    Preproc -->|FramePacket<br>+ model_input_frame, preprocess_meta| YOLO
-    YOLO -->|FramePacket<br>+ detections| Tracker
-    Tracker -->|FramePacket<br>+ tracks, lost_tracks, motion| Storage
-    Storage -->|FramePacket<br>без изменений| Draw
-    Draw -->|FramePacket<br>+ annotated_frame| Streamer
-
-    %% Хранилище — побочный выход StorageStage
-    Storage -->|INSERT events| DB
-    Storage -->|сохранение фрагментов| Files
-
-    %% Выходной поток
-    Streamer -->|RTSP H.264| Player
-
-    %% Управление
-    CLI -->|HTTP :8081| API
-    API -->|PATCH конфигурации| RC
-    RC -->|confidence, model_path| YOLO
-    RC -->|включение выходного RTSP-потока| Streamer
-    API -->|путь к папке с тестовыми изображениями| ImgFolder
-```
-```mermaid
-sequenceDiagram
-    actor Operator as Оператор
-    participant MainLoop as main()
-    participant RC as runtime_config
-    participant API as api : FastAPI
-    participant Cam as camera : FFmpegRTSPCamera
-    participant Pipe as pipeline : Pipeline
-    participant Storage as StorageStage
-    participant Streamer as streamer : RtspStreamer
-    participant DB as SQLite (events.db)
-    participant Files as FileStorage (data/crops/)
-
-    Note over Operator,Files: Запуск
-    Operator->>MainLoop: python main.py
-    MainLoop->>RC: init_app_config_from_file()
-    RC-->>MainLoop: cfg, model_path, conf, rtsp_url
-
-    Note over Operator,Files: Инициализация сессии
-    MainLoop->>API: запуск в отдельном потоке (uvicorn)
-    activate API
-    MainLoop->>Cam: FFmpegRTSPCamera(rtsp_url)
-    activate Cam
-    MainLoop->>Pipe: build_pipeline(yolo_stage, tracker_stage, storage_stage, draw_stage)
-    activate Pipe
-    MainLoop->>Streamer: create_rtsp_streamer(output_rtsp_url)
-    activate Streamer
-
-    Note over Operator,Files: Обработка кадров
-    loop for packet in camera.frames()
-        Cam-->>MainLoop: packet (FramePacket с BGR-кадром)
-        MainLoop->>Pipe: pipeline.process(packet)
-        Pipe->>Storage: stage(packet)
-        Storage->>DB: INSERT event (подтверждённый трек)
-        Storage->>Files: сохранение crop-фрагмента
-        Pipe-->>MainLoop: packet (+ annotated_frame)
-
-        alt output stream включён
-            MainLoop->>Streamer: streamer.write(annotated_frame)
-            Streamer-->>MainLoop: ok
-        end
-    end
-
-    Note over Operator,Files: Остановка
-    opt оператор переводит в idle
-        Operator->>API: POST /api/v1/control { "mode": "idle" } через CLI / curl / Swagger
-        API->>MainLoop: runtime_state.mode = "idle"
-        MainLoop->>Cam: camera.release()
-        deactivate Cam
-        MainLoop->>Streamer: streamer.stop()
-        deactivate Streamer
-        deactivate Pipe
-        deactivate API
-    end
-```
-

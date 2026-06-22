@@ -20,7 +20,7 @@ def pause() -> None:
 def show_menu() -> None:
     print("\n================ ROAD MONITORING ================")
     print("Управление MVP:")
-    print("1) Выбрать модель детектора")
+    print("1) Выбрать файл весов модели ИНС")
     print("2) Изменить порог уверенности детектора")
     print("3) Включить/выключить выходной видеопоток MVP")
     print("4) Переключить режим приложения: RTSP/IDLE")
@@ -82,23 +82,23 @@ def list_model_files() -> list[Path]:
 def choose_model() -> None:
     models = list_model_files()
     if not MODELS_DIR.is_dir():
-        print(f"Папка моделей не найдена: {MODELS_DIR}")
+        print(f"Папка весов моделей не найдена: {MODELS_DIR}")
         return
     if not models:
-        print(f"В папке {MODELS_DIR} не найдено файлов моделей.")
+        print(f"В папке {MODELS_DIR} не найдено файлов весов моделей.")
         return
 
     cfg = api_client.get_config()
     current_model = cfg.get("detector", {}).get("model_path")
 
-    print("\nДоступные модели:")
+    print("\nДоступные веса моделей:")
     for idx, model_path in enumerate(models, start=1):
         rel_path = f"models/{model_path.name}"
         marker = " [текущая]" if rel_path == current_model else ""
         print(f"{idx}) {model_path.name}{marker}")
     print("0) Назад")
 
-    choice = input("Выберите модель: ").strip()
+    choice = input("Выберите веса модели: ").strip()
     if choice == "0":
         return
     if not choice.isdigit():
